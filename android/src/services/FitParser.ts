@@ -1,3 +1,5 @@
+// Copyright (C) 2026 breizhvenum. Licensed under the GNU GPL v3 (see LICENSE).
+// Part of rom1rv, derived from the Sommet project by skinnie (https://github.com/skinnie/sommet), also GPL v3.
 // Garmin rom1rv — reads a watch-native .fit (Forerunner 255 etc.) with no dependency.
 // Gives the same point shape as readSmlPoints (lat, lon, time ms, dopplerSpeed m/s, sat, hdop) so the
 // Speed analysis runs unchanged, and builds a GPX (with the Doppler speed kept) from those points.

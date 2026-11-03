@@ -1,3 +1,5 @@
+// Copyright (C) 2026 breizhvenum. Licensed under the GNU GPL v3 (see LICENSE).
+// Part of rom1rv, derived from the Sommet project by skinnie (https://github.com/skinnie/sommet), also GPL v3.
 import RNFS from 'react-native-fs';
 import { pickGpxFile } from '../native/AmbitUsbModule';
 import { base64ToBytes, fitToGpx, parseFit } from './FitParser';

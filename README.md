@@ -441,3 +441,11 @@ Services and libraries the app talks to at runtime:
 - POIs along a route: exported from **[PitStopper](https://pitstopper.net)**.
 
 Full list with details: [`docs/reference/credits.md`](docs/reference/credits.md).
+
+## Credits and license
+
+This application (rom1rv) is based on **Sommet** by skinnie — https://github.com/skinnie/sommet — and on the work of its contributors. Their copyright notices are kept as they are in the source files.
+
+Additions by **breizhvenum** (2026): Suunto SML speed statistics, equipment (gear) management, basedevitesse.com upload, and Garmin FIT support (FIT import, GPX with Doppler speed, Doppler option).
+
+The whole project is distributed under the **GNU General Public License v3** (see [LICENSE](LICENSE)). If you reuse or modify this code, you must keep these notices, mark your changes and publish the result under the same license.
