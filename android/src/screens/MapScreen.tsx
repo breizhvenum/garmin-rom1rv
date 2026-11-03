@@ -823,14 +823,18 @@ export default function MapScreen() {
               const fitSrc = !gpxSrc;
               return (
                 <>
-                  {fitSrc && <ExportMenuItem styles={styles} label="Partager le FIT d’origine" onPress={handleShareSml} />}
-                  {fitSrc && <ExportMenuItem styles={styles} label="Enregistrer le FIT d’origine (Téléchargements)" onPress={handleSaveSmlToDownloads} />}
-                  <ExportMenuItem styles={styles} label={fitSrc ? 'Partager le GPX (converti du FIT, Doppler conservé)' : 'Partager le GPX'} onPress={handleShareGpxFromSml} />
-                  <ExportMenuItem styles={styles} label={fitSrc ? 'Enregistrer le GPX converti du FIT (Téléchargements)' : 'Enregistrer le GPX (Téléchargements)'} onPress={handleSaveGpxFromSmlToDownloads} />
-                  <ExportMenuItem styles={styles} label={`Envoyer à basedevitesse.com (${fitSrc ? 'FIT' : 'GPX'})`} onPress={handleUploadBdv} />
+                  <ExportSection styles={styles} title="Envoyer" />
+                  <ExportMenuItem styles={styles} icon="upload" highlight label="Envoyer à basedevitesse.com" sub={fitSrc ? 'Le fichier FIT de la montre' : 'Le fichier GPX'} onPress={handleUploadBdv} />
+                  <ExportSection styles={styles} title="Partager" />
+                  {fitSrc && <ExportMenuItem styles={styles} icon="upload" label="Fichier FIT d’origine" onPress={handleShareSml} />}
+                  <ExportMenuItem styles={styles} icon="upload" label={fitSrc ? 'GPX avec vitesse Doppler' : 'Fichier GPX'} sub={fitSrc ? 'Converti du FIT' : undefined} onPress={handleShareGpxFromSml} />
+                  <ExportSection styles={styles} title="Enregistrer dans Téléchargements" />
+                  {fitSrc && <ExportMenuItem styles={styles} icon="download" label="Fichier FIT d’origine" onPress={handleSaveSmlToDownloads} />}
+                  <ExportMenuItem styles={styles} icon="download" label={fitSrc ? 'GPX avec vitesse Doppler' : 'Fichier GPX'} onPress={handleSaveGpxFromSmlToDownloads} />
                 </>
               );
             })()}
+            <ExportSection styles={styles} title="Autres" />
             <ExportMenuItem styles={styles} label={t.uploadStrava}   onPress={handleUploadStrava} />
             <ExportMenuItem styles={styles} label={t.gearSetForActivity} onPress={() => { setShowExportMenu(false); setShowGearPicker(true); }} />
           </ScrollView>
@@ -874,7 +878,7 @@ export default function MapScreen() {
         >
           {exporting
             ? <Text style={styles.exportFabText}>…</Text>
-            : <Icon name="upload" size={22} color={theme.primary} />}
+            : <><Icon name="upload" size={20} color="#fff" /><Text style={styles.exportFabLabel}>Exporter / Partager</Text></>}
         </TouchableOpacity>
 
         {(showExportMenu || !!bdvPicker) && exportSheet}
@@ -932,7 +936,10 @@ export default function MapScreen() {
               : '…'}
           </Text>
         ) : (
-          <Icon name="download" size={22} color={theme.primary} />
+          <>
+            <Icon name="map" size={18} color={theme.primary} />
+            <Text style={styles.offlineFabLabel}>{'Cartes\nhors ligne'}</Text>
+          </>
         )}
       </TouchableOpacity>
 
@@ -944,7 +951,7 @@ export default function MapScreen() {
       >
         {exporting
           ? <Text style={styles.exportFabText}>…</Text>
-          : <Icon name="upload" size={22} color={theme.primary} />}
+          : <><Icon name="upload" size={20} color="#fff" /><Text style={styles.exportFabLabel}>Exporter / Partager</Text></>}
       </TouchableOpacity>
 
       {/* ── Menu d'export ── */}
@@ -1042,12 +1049,20 @@ export default function MapScreen() {
 
 
 
-function ExportMenuItem({ styles, label, onPress }: { styles: ReturnType<typeof createStyles>; label: string; onPress: () => void }) {
+function ExportMenuItem({ styles, label, sub, icon, highlight, onPress }: { styles: ReturnType<typeof createStyles>; label: string; sub?: string; icon?: 'upload' | 'download'; highlight?: boolean; onPress: () => void }) {
+  const theme = useV3Theme();
   return (
-    <TouchableOpacity style={styles.exportItem} onPress={onPress}>
-      <Text style={styles.exportItemText}>{label}</Text>
+    <TouchableOpacity style={[styles.exportItem, { flexDirection: 'row', alignItems: 'center' }, highlight && { backgroundColor: theme.primary + '22' }]} onPress={onPress}>
+      {icon ? <View style={{ width: 30 }}><Icon name={icon} size={18} color={theme.primary} /></View> : null}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.exportItemText}>{label}</Text>
+        {!!sub && <Text style={styles.exportItemSub}>{sub}</Text>}
+      </View>
     </TouchableOpacity>
   );
+}
+function ExportSection({ styles, title }: { styles: ReturnType<typeof createStyles>; title: string }) {
+  return <Text style={styles.exportSection}>{title}</Text>;
 }
 
 
@@ -1098,31 +1113,35 @@ function createStyles(t: ReturnType<typeof useV3Theme>) {
       position: 'absolute',
       bottom: 12,
       right: 16,
-      width: 48,
       height: 48,
+      paddingHorizontal: 18,
       borderRadius: 24,
-      backgroundColor: t.primary + '1F',
-      borderColor: t.primary,
-      borderWidth: 1,
+      backgroundColor: t.primary,
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 8,
+      elevation: 4,
     },
-    // Real, 2026-08-10 (offline maps) - same pill as exportFab, placed just to its left
-    // (76 = 16 + 48 + 12, exportFab's own right offset + width + a real gap) rather than
-    // stacking vertically, so it can't collide with exportMenu popping up above exportFab.
+    exportFabLabel: { color: '#fff', fontSize: 15, fontWeight: '700' },
+    // Offline maps: a labelled pill just to the left of the export pill (the export pill is ~210 wide),
+    // so nobody mistakes it for "download my track".
     offlineFab: {
       position: 'absolute',
       bottom: 12,
-      right: 76,
-      width: 48,
+      right: 236,
       height: 48,
+      paddingHorizontal: 12,
       borderRadius: 24,
-      backgroundColor: t.primary + '1F',
+      backgroundColor: t.card,
       borderColor: t.primary,
       borderWidth: 1,
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 6,
     },
+    offlineFabLabel: { color: t.primary, fontSize: 12, fontWeight: '600', lineHeight: 14 },
     btnDisabled: { opacity: 0.5 },
     exportFabText: { fontSize: 20, color: t.primary },
     exportMenu: {
@@ -1142,7 +1161,9 @@ function createStyles(t: ReturnType<typeof useV3Theme>) {
       borderBottomWidth: 1,
       borderBottomColor: t.mutedText + '33',
     },
-    exportItemText: { color: t.text, fontSize: 14 },
+    exportItemText: { color: t.text, fontSize: 15 },
+    exportItemSub: { color: t.mutedText, fontSize: 12, marginTop: 1 },
+    exportSection: { color: t.mutedText, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 6 },
 
     // Replay bar
     replayBar: {
