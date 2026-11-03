@@ -129,9 +129,32 @@ class GarminMtpModule(private val reactContext: ReactApplicationContext) :
         withGarmin(promise) { device ->
             executor.execute {
                 try {
-                    val d = openMtp(device)
-                    val folder = findActivityFolder(d)
-                        ?: throw Exception("Dossier GARMIN/Activity introuvable sur la montre.")
+                    // The watch can take several seconds after the cable is plugged in before it exposes its
+                    // storage: retry (re-opening the link each time) for up to 30 s instead of failing at once.
+                    var dev: MtpDevice? = null
+                    var found: Pair<Int, Int>? = null
+                    var lastErr = "La montre ne répond pas."
+                    val deadline = System.currentTimeMillis() + 30000L
+                    var current: UsbDevice? = device
+                    while (System.currentTimeMillis() < deadline) {
+                        try {
+                            val usb = findGarmin() ?: current
+                                ?: throw Exception("Montre débranchée.")
+                            current = usb
+                            val opened = openMtp(usb)
+                            val fol = findActivityFolder(opened)
+                            if (fol != null) { dev = opened; found = fol; break }
+                            lastErr = "Dossier GARMIN/Activity introuvable : la montre n'a pas fini de démarrer son stockage."
+                        } catch (e: Exception) {
+                            lastErr = e.message ?: e.toString()
+                            if (findGarmin() == null) break   // really unplugged: no point waiting
+                        }
+                        try { mtp?.close() } catch (_: Exception) {}
+                        mtp = null
+                        Thread.sleep(1500)
+                    }
+                    val d = dev ?: throw Exception(lastErr)
+                    val folder = found ?: throw Exception(lastErr)
                     val handles = d.getObjectHandles(folder.first, 0, folder.second) ?: IntArray(0)
                     val files = ArrayList<Triple<Int, String, Pair<Int, Long>>>()
                     for (h in handles) {
