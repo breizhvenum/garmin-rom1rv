@@ -79,7 +79,7 @@ android {
 
     namespace "com.ambitsyncmodern"
     defaultConfig {
-        applicationId "com.ambitsyncmodern"
+        applicationId "com.garminrom1rv"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 245

@@ -68,8 +68,25 @@ export async function adoptSmlFile(id: string, tmpPath: string, overwrite = fals
   }
 }
 
-/** The <id>.sml path for an activity's <id>.gpx path, if that SML file exists on disk. */
+/** Same as adoptSmlFile for a watch-native .fit (Garmin rom1rv): kept next to the GPX as <id>.fit. */
+export async function adoptFitFile(id: string, tmpPath: string, overwrite = false): Promise<string | null> {
+  if (!tmpPath) return null;
+  try {
+    await ensureDir();
+    const path = `${ACTIVITIES_DIR}/${id}.fit`;
+    if (!overwrite && await RNFS.exists(path)) return null;
+    if (await RNFS.exists(path)) await RNFS.unlink(path);
+    await RNFS.moveFile(tmpPath, path);
+    return path;
+  } finally {
+    if (await RNFS.exists(tmpPath).catch(() => false)) await RNFS.unlink(tmpPath).catch(() => {});
+  }
+}
+
+/** The session's source file for an activity's <id>.gpx: its <id>.fit (Garmin) or <id>.sml, if it exists on disk. */
 export async function smlPathForGpx(gpxPath: string): Promise<string | null> {
+  const fit = gpxPath.replace(/\.gpx$/, '.fit');
+  if (await RNFS.exists(fit)) return fit;
   const path = gpxPath.replace(/\.gpx$/, '.sml');
   return (await RNFS.exists(path)) ? path : null;
 }

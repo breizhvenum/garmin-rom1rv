@@ -32,7 +32,7 @@ import { CREDITS } from '../legal/credits';
 import {
   getRunalyzeApiKey, saveRunalyzeApiKey, removeRunalyzeApiKey,
 } from '../services/ApiRunalyze';
-import { importSmlActivity, importSmlFolder } from '../services/ImportSml';
+import { importFitActivity } from '../services/ImportFit';
 import { getBdvAccount, bdvLogin, removeBdvAccount, bdvHasBuildKey, fetchBdvSupports, uploadSessionToBdv, BdvSupport, BdvAccount } from '../services/ApiBaseDeVitesse';
 import {
   getIntervalsIcuCredentials, saveIntervalsIcuCredentials, removeIntervalsIcuCredentials,
@@ -363,23 +363,11 @@ export default function SettingsScreen() {
   async function handleImportSml() {
     setImportBusy(true); setImportMsg('');
     try {
-      const r = await importSmlActivity();
+      const r = await importFitActivity();
       if (r.status === 'imported') setImportMsg(`Activité ajoutée (${(r.distanceM / 1000).toFixed(2)} km, ${Math.round(r.durationS / 60)} min).`);
       else if (r.status === 'exists') setImportMsg('Cette activité existe déjà dans l\'appli.');
       else setImportMsg('Cette activité avait été supprimée : elle n\'est pas rajoutée.');
     } catch (e: any) {
-      if (!String(e?.code ?? e?.message).includes('CANCEL')) setImportMsg(`Erreur : ${e?.message ?? String(e)}`);
-    } finally { setImportBusy(false); }
-  }
-  async function handleImportSmlFolder() {
-    setImportBusy(true); setImportMsg('Lecture du dossier…');
-    try {
-      const r = await importSmlFolder();
-      if (r.total === 0) setImportMsg('Aucun fichier .sml trouvé dans ce dossier.');
-      else setImportMsg(`${r.total} fichier(s) SML : ${r.imported} ajouté(s), ${r.exists} déjà présent(s)` +
-        (r.deleted ? `, ${r.deleted} supprimé(s) avant` : '') + (r.failed ? `, ${r.failed} illisible(s)` : '') + '.');
-    } catch (e: any) {
-      setImportMsg('');
       if (!String(e?.code ?? e?.message).includes('CANCEL')) setImportMsg(`Erreur : ${e?.message ?? String(e)}`);
     } finally { setImportBusy(false); }
   }
@@ -751,8 +739,7 @@ export default function SettingsScreen() {
           <Text style={styles.cardTitle}>Importer un SML</Text>
         </View>
         <Text style={styles.sectionDesc}>Ajoute une activité à partir d'un fichier .sml sauvegardé (Moveslink2 ou export de l'appli), ou toutes celles d'un dossier.</Text>
-        <Button label="Choisir un fichier SML…" variant="outline" loading={importBusy} onPress={handleImportSml} />
-        <Button label="Importer un dossier de SML…" variant="outline" loading={importBusy} onPress={handleImportSmlFolder} />
+        <Button label="Choisir un fichier FIT…" variant="outline" loading={importBusy} onPress={handleImportSml} />
         {!!importMsg && <Text selectable style={styles.sectionDesc}>{importMsg}</Text>}
       </View>
       {/* 2026-10-21 (Settings split): first card on the screen, each account with its own button. */}
