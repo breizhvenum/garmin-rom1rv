@@ -24,10 +24,6 @@ name: desktop apps
 
 on:
   workflow_dispatch:            # the "Run workflow" button, for testing on demand
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"     # v1.2.3      -> attach to the full release
-      - "v[0-9]+.[0-9]+.[0-9]+-*"   # v1.2.3-rc.1 -> attach to the pre-release
 
 jobs:
   # ---- Windows: produce a .zip containing Sommet.exe and everything it needs -------------

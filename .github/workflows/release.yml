@@ -63,7 +63,7 @@ jobs:
         run: |
           mkdir -p out
           cp android/android/app/build/outputs/apk/release/*.apk \
-             "out/Ambit_rom1rv_${GITHUB_REF_NAME}.apk"
+             "out/Garmin_rom1rv_${GITHUB_REF_NAME}.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: apk
