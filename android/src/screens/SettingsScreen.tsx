@@ -747,9 +747,9 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <View style={styles.cardHead}>
           <IconBadge icon="sync" />
-          <Text style={styles.cardTitle}>Importer un SML</Text>
+          <Text style={styles.cardTitle}>Importer un fichier</Text>
         </View>
-        <Text style={styles.sectionDesc}>Ajoute une activité à partir d'un fichier .sml sauvegardé (Moveslink2 ou export de l'appli), ou toutes celles d'un dossier.</Text>
+        <Text style={styles.sectionDesc}>Ajoute une activité à partir d'un fichier Garmin : FIT ou GPX.</Text>
         <Button label="Lire la montre (câble USB)…" variant="outline" loading={importBusy} onPress={handleImportWatch} />
         <Button label="Importer un fichier Garmin (FIT ou GPX)…" variant="outline" loading={importBusy} onPress={handleImportSml} />
         {!!importMsg && <Text selectable style={styles.sectionDesc}>{importMsg}</Text>}

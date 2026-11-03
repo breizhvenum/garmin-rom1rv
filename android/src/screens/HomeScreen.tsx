@@ -500,6 +500,24 @@ export default function HomeScreen() {
   const [watchMsg, setWatchMsg] = useState('');
   const [watchBusy, setWatchBusy] = useState(false);
   const watchBusyRef = useRef(false);
+  const [watchDone, setWatchDone] = useState(false);
+  // The cable notice is shown the very first time the app is opened only; the cross closes it.
+  const [cableNotice, setCableNotice] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem('garmin_cable_notice_seen_v1').then(v => {
+      if (!v) { setCableNotice(true); AsyncStorage.setItem('garmin_cable_notice_seen_v1', '1').catch(() => {}); }
+    }).catch(() => {});
+  }, []);
+  // Once the reading is over, watch for the cable being unplugged: the message then goes away.
+  useEffect(() => {
+    if (!watchDone) return;
+    const id = setInterval(() => {
+      detectAttachedDeviceType().then(type => {
+        if (type === 'none') { setWatchDone(false); setWatchMsg(''); startSearchingRef.current(); }
+      }).catch(() => {});
+    }, 2000);
+    return () => clearInterval(id);
+  }, [watchDone]);
   async function autoWatchImport() {
     if (watchBusyRef.current) return;
     watchBusyRef.current = true;
@@ -508,11 +526,13 @@ export default function HomeScreen() {
     setConnectError(undefined);
     setPhase('connect-error');   // not "connected": the card below carries the message
     setWatchBusy(true);
+    setWatchDone(false);
     setWatchMsg('Lecture de la montre… (déverrouille-la ; accepte l’autorisation USB si elle apparaît)');
     try {
       const r = await importFromWatch(10);
       setWatchMsg(`${r.onWatch} activité(s) récente(s) sur la montre : ${r.imported} ajoutée(s), ${r.exists} déjà présente(s)` +
-        (r.skipped ? `, ${r.skipped} déjà lue(s)` : '') + (r.deleted ? `, ${r.deleted} supprimée(s) avant` : '') + (r.failed ? `, ${r.failed} illisible(s)` : '') + '.');
+        (r.skipped ? `, ${r.skipped} déjà lue(s)` : '') + (r.deleted ? `, ${r.deleted} supprimée(s) avant` : '') + (r.failed ? `, ${r.failed} illisible(s)` : '') + '.\n\nLecture terminée : vous pouvez débrancher votre montre.');
+      setWatchDone(true);
     } catch (e: any) {
       setWatchMsg(e?.message ?? t.unknownError);
     } finally {
@@ -1247,16 +1267,16 @@ export default function HomeScreen() {
           whatever the phone's width or font size: the "r" is measured, then the photo is moved. */}
       <View
         onLayout={e => setHdrBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
-        style={[styles.header, { alignSelf: 'center', width: Math.max(winWidth - 24, 200), borderRadius: 18, overflow: 'hidden', backgroundColor: '#000', minHeight: 230, justifyContent: 'flex-end', paddingTop: 0, paddingBottom: 14 }]}>
+        style={[styles.header, { alignSelf: 'center', width: Math.max(winWidth - 24, 200), borderRadius: 18, overflow: 'hidden', backgroundColor: '#000', minHeight: 270, justifyContent: 'flex-end', paddingTop: 0, paddingBottom: 14 }]}>
         {(() => {
-          const HEAD_X = 0.500, HEAD_Y = 0.607, RATIO = 1376 / 710;   // head position in the photo (fractions)
+          const HEAD_X = 0.500, HEAD_Y = 0.490, RATIO = 1376 / 880;   // head position in the photo (fractions)
           const ready = hdrBox.w > 0 && rowBox && rBox;
           const w = Math.max(hdrBox.w * 1.45, hdrBox.h * 1.1 * RATIO, 1);   // always covers the whole banner
           const h = w / RATIO;
           const rx = ready ? rowBox!.x + rBox!.x + rBox!.width / 2 : hdrBox.w / 2;
           const ry = ready ? rowBox!.y + rBox!.y + rBox!.height / 2 : hdrBox.h / 2;
           const left = Math.min(0, Math.max(hdrBox.w - w, hdrBox.w / 2 - HEAD_X * w));   // rider + sail centered
-          const HEAD_ABOVE = 49;   // the head sits just above the text line
+          const HEAD_ABOVE = 95;   // the whole board sits above the title   // the head sits just above the text line
           const top = Math.min(0, Math.max(hdrBox.h - h, ry - HEAD_ABOVE - HEAD_Y * h));
           return <Image source={require('../assets/hero_photo.jpg')} resizeMode="stretch"
             style={{ position: 'absolute', left, top, width: w, height: h }} />;
@@ -1273,8 +1293,8 @@ export default function HomeScreen() {
         <Badge label={`v${APP_VERSION}`} />
       </View>
 
-      {/* First-sync notice, shown before the watch is connected. */}
-      {!connected && (
+      {/* Cable notice: first opening only, closable. */}
+      {!connected && cableNotice && (
         <View style={{
           flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 16, marginBottom: 12,
           paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1,
@@ -1284,6 +1304,9 @@ export default function HomeScreen() {
           <Text style={{ flex: 1, fontSize: 13, color: theme.text }}>
             Pour ne pas interférer avec les applis officielles Garmin, la connexion ne se fait qu'au moyen du câble de la montre.
           </Text>
+          <TouchableOpacity onPress={() => setCableNotice(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Fermer">
+            <Text style={{ fontSize: 18, lineHeight: 20, color: theme.mutedText }}>✕</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1315,7 +1338,7 @@ export default function HomeScreen() {
           watch glyph at the same nominal size - a further 10% bump, on top of the same
           portrait/landscape scaling above, Garmin-only. */}
       <Icon
-        name={deviceType === 'bryton' ? 'bryton' : deviceType === 'garmin' ? 'etrex' : 'watch'}
+        name="watch"
         size={Math.round((winWidth < winHeight ? 48 : 40) * (deviceType === 'garmin' || deviceType === 'bryton' ? 1.1 : 1))}
         color={connected || deviceType === 'bryton' ? theme.text : theme.mutedText}
       />
