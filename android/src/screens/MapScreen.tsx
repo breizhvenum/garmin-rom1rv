@@ -692,10 +692,8 @@ export default function MapScreen() {
 
   // No .sml on disk for this move: say why (what the last sync's SML step did) instead of hiding the entry.
   async function explainNoSml() {
-    const status = await loadSmlStatus();
-    Alert.alert('SML',
-      'Aucun fichier SML n’existe encore pour cette activité.\n\nRelis-la depuis la montre : connecte la montre, puis fais un APPUI LONG sur le bouton Sync de l’accueil et choisis Retélécharger.\n\n' +
-      (status ? `Dernière synchro (étape SML) :\n${status}` : 'Aucune étape SML n’a encore tourné sur cette installation (synchronise d’abord la montre).'));
+    Alert.alert('Fichier de la session',
+      'Aucun fichier FIT ou GPX n’existe pour cette activité.\n\nImporte-le depuis Réglages (Importer un fichier), ou recharge tes activités depuis l’accueil avec la montre branchée.');
   }
 
   // GPX built from the activity's SML (the app's own GPX/FIT exports were removed from the menu).
@@ -1010,13 +1008,13 @@ export default function MapScreen() {
         <>
         {!smlPath && (
           <View style={{ margin: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card }}>
-            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>Pas de fichier SML pour cette activité</Text>
+            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>Pas de fichier FIT ou GPX pour cette activité</Text>
             <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 6 }}>
-              Les statistiques rom1rv Speed et l’envoi à basedevitesse.com ont besoin du SML. Rebranche la montre (câble fourni + adaptateur OTG), puis appuie sur le bouton : l’appli relit la montre et crée le SML.
+              Les statistiques rom1rv Speed et l’envoi à basedevitesse.com ont besoin du fichier de la session. Importe-le depuis Réglages, ou recharge tes activités depuis l’accueil avec la montre branchée.
             </Text>
-            <TouchableOpacity activeOpacity={0.8} onPress={() => { requestSmlRegen(); navigation.navigate('Home' as any); }}
+            <TouchableOpacity activeOpacity={0.8} onPress={() => { navigation.navigate('Home' as any); }}
               style={{ marginTop: 10, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Générer le SML</Text>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Aller à l’accueil</Text>
             </TouchableOpacity>
           </View>
         )}

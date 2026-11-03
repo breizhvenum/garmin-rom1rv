@@ -96,7 +96,7 @@ const fr = {
   homeTagline: "L'aventure commence dehors.",
   homeNoDeviceTitle:
     "Aucun appareil détecté. Vérifiez le câble et l'appareil, ou utilisez l'app sans appareil.",
-  homeNoDeviceSub: 'Branchez votre montre Garmin avec le câble USB (adaptateur OTG).',
+  homeNoDeviceSub: 'Branchez votre montre Garmin avec son câble USB.',
   // iOS n'a pas d'USB : on ne propose que le Bluetooth, et on explique que les Ambit1/Ambit2
   // (USB uniquement) ne peuvent pas se connecter ici, sinon leur échec de scan BLE est muet.
   homeNoDeviceSubIos:
@@ -991,7 +991,7 @@ const en: typeof fr = {
   homeTagline: 'Adventure starts outside.',
   homeNoDeviceTitle:
     'No device detected, please check your cable and device or use app without it.',
-  homeNoDeviceSub: 'Plug in your Garmin watch with the USB cable (OTG adapter).',
+  homeNoDeviceSub: 'Plug in your Garmin watch with its USB cable.',
   // iOS has no USB, so offer only Bluetooth and spell out that the USB-only Ambit1/Ambit2
   // can't connect here — otherwise their BLE scan just times out with no explanation.
   homeNoDeviceSubIos:

@@ -761,7 +761,7 @@ export default function SettingsScreen() {
           <Text style={styles.cardTitle}>{t.connectionsSection}</Text>
         </View>
         <Text style={styles.sectionDesc}>
-          Pour la première synchronisation de vos activités, merci de connecter la montre avec le câble fourni et l'adaptateur OTG correspondant à votre téléphone.
+          Pour ne pas interférer avec les applis officielles Garmin, la connexion ne se fait qu'au moyen du câble de la montre.
         </Text>
         <ConnectionRow
           name={t.intervalsSection}

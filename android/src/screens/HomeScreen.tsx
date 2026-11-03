@@ -513,7 +513,7 @@ export default function HomeScreen() {
     if (!watchDone) return;
     const id = setInterval(() => {
       detectAttachedDeviceType().then(type => {
-        if (type === 'none') { setWatchDone(false); setWatchMsg(''); startSearchingRef.current(); }
+        if (type === 'none') { setWatchDone(false); setWatchMsg(''); }
       }).catch(() => {});
     }, 2000);
     return () => clearInterval(id);
@@ -523,15 +523,13 @@ export default function HomeScreen() {
     watchBusyRef.current = true;
     stopSearchTimers();
     setDeviceType('garmin');
-    setConnectError(undefined);
-    setPhase('connect-error');   // not "connected": the card below carries the message
-    setWatchBusy(true);
     setWatchDone(false);
-    setWatchMsg('Lecture de la montre… (déverrouille-la ; accepte l’autorisation USB si elle apparaît)');
+    setWatchMsg('');
+    setWatchBusy(true);
     try {
       const r = await importFromWatch(10);
       setWatchMsg(`${r.onWatch} activité(s) récente(s) sur la montre : ${r.imported} ajoutée(s), ${r.exists} déjà présente(s)` +
-        (r.skipped ? `, ${r.skipped} déjà lue(s)` : '') + (r.deleted ? `, ${r.deleted} supprimée(s) avant` : '') + (r.failed ? `, ${r.failed} illisible(s)` : '') + '.\n\nLecture terminée : vous pouvez débrancher votre montre.');
+        (r.skipped ? `, ${r.skipped} déjà lue(s)` : '') + (r.deleted ? `, ${r.deleted} supprimée(s) avant` : '') + (r.failed ? `, ${r.failed} illisible(s)` : '') + '.');
       setWatchDone(true);
     } catch (e: any) {
       setWatchMsg(e?.message ?? t.unknownError);
@@ -543,7 +541,7 @@ export default function HomeScreen() {
 
   async function connectFlow(type: 'ambit' | 'garmin') {
     setDeviceType(type);
-    if (type === 'garmin') { await autoWatchImport(); return; }
+    if (type === 'garmin') return;   // Garmin rom1rv: nothing starts by itself, the "Charger vos activités" button does it
     setBleAttempt(false);
     setBleConnected(false);          // this is a USB connect path
     bleConnectedRef.current = false;
@@ -1352,42 +1350,22 @@ export default function HomeScreen() {
           dashboard, holding the right message + connect options, instead of a separate
           full-screen splash. `busy` = actively connecting or scanning (spinner, no buttons). ── */}
       {!connected && deviceType !== 'bryton' && (() => {
-        const busy = phase === 'connecting';
-        const title = watchMsg ? watchMsg : phase === 'searching' ? t.homeSearchingTitle
-          : phase === 'connecting' ? connectingMsg
-          : phase === 'connect-error' ? (connectError ?? t.homeNoDeviceTitle)
-          : t.homeNoDeviceTitle;
-        const sub = phase === 'searching' ? t.homeTagline
-          : phase === 'connecting' ? (bleAttempt ? t.homeBleReadyMsg : '')
-          // connect-error: the title already carries the cause. On iOS add an actionable sub
-          // (turn BT on / re-trigger Sync + Retry) since that's the common BLE dead-end there.
-          : phase === 'connect-error' ? (Platform.OS === 'ios' ? t.homeBleErrorSubIos : '')
-          // iOS: no USB, so the default "Plug it in via USB…" sub is wrong. Use the BLE-only
-          // wording, which also tells USB-only Ambit1/2 owners why their watch won't appear.
-          : Platform.OS === 'ios' ? t.homeNoDeviceSubIos : t.homeNoDeviceSub;
+        const title = watchBusy ? 'Chargement en cours'
+          : watchDone ? 'Vous pouvez débrancher votre montre.'
+          : watchMsg;
+        const sub = watchDone ? watchMsg : '';
         return (
           <Card style={[roomy ? styles.deviceCardRoomyFull : styles.deviceCardCol, styles.deviceCardInner]}>
-            <Text style={[styles.deviceName, v3TextStyle]}>{title}</Text>
+            {title.length > 0 && <Text style={[styles.deviceName, v3TextStyle]}>{title}</Text>}
             {sub.length > 0 && <Text style={[styles.deviceSub, v3MutedStyle]}>{sub}</Text>}
-            {(phase === 'searching' || busy || watchBusy) && (
+            {watchBusy && (
               <View style={{ marginTop: 12 }}>
                 <ActivityIndicator size="small" color={theme.text} />
               </View>
             )}
-            {/* Connect options - hidden while actively connecting (nothing to do but wait).
-                Multi-watch switcher: one direct-connect button per already-paired watch. */}
-            {!busy && (
+            {!watchBusy && (
               <View style={styles.heroButtons}>
-                {/* On iOS there is no USB, so "Retry" must run the BLE connect (not the
-                    USB search), otherwise it's a dead button — only "Pair via Bluetooth"
-                    would work, which is confusing. */}
-                {phase === 'timeout' && (
-                  <Button label={t.homeConnectRetryBtn}
-                    onPress={Platform.OS === 'ios' ? () => handleBleConnectRef.current() : startSearching}
-                    variant="text" grow={false} />
-                )}
-                <Button label="Lire la montre (câble USB)" onPress={() => autoWatchImport()}
-                  disabled={watchBusy} variant="text" grow={false} />
+                <Button label="Charger vos activités" onPress={() => autoWatchImport()} grow={false} />
               </View>
             )}
           </Card>
