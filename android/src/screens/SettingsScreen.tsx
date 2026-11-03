@@ -33,6 +33,7 @@ import {
   getRunalyzeApiKey, saveRunalyzeApiKey, removeRunalyzeApiKey,
 } from '../services/ApiRunalyze';
 import { importFitActivity } from '../services/ImportFit';
+import { importFromWatch } from '../services/ImportFromWatch';
 import { getBdvAccount, bdvLogin, removeBdvAccount, bdvHasBuildKey, fetchBdvSupports, uploadSessionToBdv, BdvSupport, BdvAccount } from '../services/ApiBaseDeVitesse';
 import {
   getIntervalsIcuCredentials, saveIntervalsIcuCredentials, removeIntervalsIcuCredentials,
@@ -369,6 +370,16 @@ export default function SettingsScreen() {
       else setImportMsg('Cette activité avait été supprimée : elle n\'est pas rajoutée.');
     } catch (e: any) {
       if (!String(e?.code ?? e?.message).includes('CANCEL')) setImportMsg(`Erreur : ${e?.message ?? String(e)}`);
+    } finally { setImportBusy(false); }
+  }
+  async function handleImportWatch() {
+    setImportBusy(true); setImportMsg('Lecture de la montre… (déverrouille-la, accepte l\'autorisation USB si elle apparaît)');
+    try {
+      const r = await importFromWatch(10);
+      setImportMsg(`${r.onWatch} activité(s) récente(s) sur la montre : ${r.imported} ajoutée(s), ${r.exists} déjà présente(s)` +
+        (r.skipped ? `, ${r.skipped} déjà lue(s)` : '') + (r.deleted ? `, ${r.deleted} supprimée(s) avant` : '') + (r.failed ? `, ${r.failed} illisible(s)` : '') + '.');
+    } catch (e: any) {
+      setImportMsg(`Erreur : ${e?.message ?? String(e)}`);
     } finally { setImportBusy(false); }
   }
   const [bdvLoginTxt, setBdvLoginTxt] = useState('');
@@ -739,6 +750,7 @@ export default function SettingsScreen() {
           <Text style={styles.cardTitle}>Importer un SML</Text>
         </View>
         <Text style={styles.sectionDesc}>Ajoute une activité à partir d'un fichier .sml sauvegardé (Moveslink2 ou export de l'appli), ou toutes celles d'un dossier.</Text>
+        <Button label="Lire la montre (câble USB)…" variant="outline" loading={importBusy} onPress={handleImportWatch} />
         <Button label="Choisir un fichier FIT…" variant="outline" loading={importBusy} onPress={handleImportSml} />
         {!!importMsg && <Text selectable style={styles.sectionDesc}>{importMsg}</Text>}
       </View>

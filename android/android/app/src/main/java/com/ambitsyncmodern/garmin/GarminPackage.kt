@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class GarminPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-        listOf(GarminModule(reactContext))
+        listOf(GarminModule(reactContext), GarminMtpModule(reactContext))
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
         emptyList()
