@@ -88,7 +88,8 @@ export async function smlPathForGpx(gpxPath: string): Promise<string | null> {
   const fit = gpxPath.replace(/\.gpx$/, '.fit');
   if (await RNFS.exists(fit)) return fit;
   const path = gpxPath.replace(/\.gpx$/, '.sml');
-  return (await RNFS.exists(path)) ? path : null;
+  if (await RNFS.exists(path)) return path;
+  return (await RNFS.exists(gpxPath)) ? gpxPath : null;   // imported GPX: the stored GPX is the source
 }
 
 /** Scratch folder the native layer writes the per-sync SML files into. */

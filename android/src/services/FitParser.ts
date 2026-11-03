@@ -116,3 +116,25 @@ export function base64ToBytes(b64: string): Uint8Array {
   }
   return out;
 }
+
+/** Points for analyseSession() from a GPX: lat/lon/time, and the Doppler speed (m/s) when the file carries one
+ *  (<gpxtpx:speed> / <speed>). No speed tag -> dopplerSpeed null, so the analysis runs on positions only. */
+export function gpxToPoints(xml: string): any[] {
+  const pts: any[] = [];
+  const re = /<trkpt\b([^>]*)>([\s\S]*?)<\/trkpt>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml)) !== null) {
+    const lat = /lat="([^"]+)"/.exec(m[1]), lon = /lon="([^"]+)"/.exec(m[1]);
+    const tm = /<time>([^<]+)<\/time>/.exec(m[2]);
+    if (!lat || !lon || !tm) continue;
+    const time = Date.parse(tm[1]);
+    const la = parseFloat(lat[1]), lo = parseFloat(lon[1]);
+    if (isNaN(time) || isNaN(la) || isNaN(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) continue;
+    const sp = /<(?:[A-Za-z0-9]+:)?speed>([^<]+)<\/(?:[A-Za-z0-9]+:)?speed>/.exec(m[2]);
+    const v = sp ? parseFloat(sp[1]) : NaN;
+    pts.push({ lat: la, lon: lo, time, dopplerSpeed: isFinite(v) && v >= 0 ? v : null, sat: null, hdop: null });
+  }
+  if (pts.length < 2) throw new Error('not enough GPS points');
+  pts.sort((a, b) => a.time - b.time);
+  return pts;
+}

@@ -5,7 +5,7 @@ import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity, TextInput 
 import RNFS from 'react-native-fs';
 import { useV3Theme } from '../theme/v3';
 import { readSmlPoints, analyseSession, fetchMeteoVent, SpeedStats } from '../services/SpeedAnalysis';
-import { base64ToBytes, fitToPoints } from '../services/FitParser';
+import { base64ToBytes, fitToPoints, gpxToPoints } from '../services/FitParser';
 
 // Stats of a session under the map, computed from the move's SML with the same method as the user's
 // analyzer (analysegpsarpro16) - speeds in knots. Wind comes from the track, then from Open-Meteo
@@ -46,6 +46,8 @@ export default function SpeedStatsPanel({ smlPath, onFailed }: { smlPath: string
   // Doppler (the watch's own speed) is ticked by default; unticked = positions only. Not remembered between activities.
   const [dopplerOn, setDopplerOn] = useState(true);
   const isFit = /\.fit$/i.test(smlPath);
+  const isGpx = /\.gpx$/i.test(smlPath);
+  const dopplerCapable = isFit || isGpx;
   const k = keyOf(smlPath, vmaxOn, vmaxKts, dopplerOn);
   const [stats, setStats] = useState<SpeedStats | null>(cache.get(keyOf(smlPath, true, VMAX_DEFAULT, true)) ?? null);
   const [busy, setBusy] = useState(false);
@@ -77,11 +79,12 @@ export default function SpeedStatsPanel({ smlPath, onFailed }: { smlPath: string
       try {
         const raw = isFit
           ? fitToPoints(base64ToBytes(await RNFS.readFile(smlPath, 'base64')))
+          : isGpx ? gpxToPoints(await RNFS.readFile(smlPath, 'utf8'))
           : readSmlPoints(await RNFS.readFile(smlPath, 'utf8'));
         // wind of the day first (5 s at most), so the alpha is computed only once
         const m = await Promise.race([fetchMeteoVent(raw), new Promise<null>(r => setTimeout(() => r(null), 5000))]);
         if (!alive.current) return;
-        const res = analyseSession(raw, m ? m.dir : null, true, isFit && dopplerOn, vmaxOn ? vmaxKts : null);   // FIT: Doppler ticked by default; SML keeps positions only
+        const res = analyseSession(raw, m ? m.dir : null, true, dopplerCapable && dopplerOn, vmaxOn ? vmaxKts : null);   // FIT: Doppler ticked by default; SML keeps positions only
         if (!res) { setBusy(false); onFailed(); return; }
         cache.set(k, res);
         saveStored(k, res);
@@ -132,13 +135,16 @@ export default function SpeedStatsPanel({ smlPath, onFailed }: { smlPath: string
             color: vmaxOn ? theme.text : theme.mutedText, textAlign: 'center', fontSize: 14, opacity: vmaxOn ? 1 : 0.5 }} />
         <Text style={{ color: theme.text, fontSize: 13, marginLeft: 6 }}>kts</Text>
       </View>
-      {isFit ? (
+      {dopplerCapable ? (
         <TouchableOpacity onPress={() => setDopplerOn(v => !v)} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
           <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: theme.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: dopplerOn ? theme.primary : 'transparent' }}>
             {dopplerOn ? <Text style={{ color: '#fff', fontWeight: '800', lineHeight: 18 }}>✓</Text> : null}
           </View>
           <Text style={{ color: theme.text, fontSize: 13, marginLeft: 10, flexShrink: 1 }}>Doppler</Text>
         </TouchableOpacity>
+      ) : null}
+      {dopplerCapable && dopplerOn && stats && !stats.useDoppler ? (
+        <Text style={{ color: theme.mutedText, fontSize: 12, marginTop: 6, marginLeft: 32 }}>Pas de Doppler dans ce fichier : vitesses calculées à partir des positions.</Text>
       ) : null}
     </View>
   );

@@ -114,7 +114,7 @@ export function NavShell({
           <View style={[styles.bar, { backgroundColor: t.text }]} />
         </TouchableOpacity>
         <Text style={[styles.appBrand, { color: t.text }]}>
-          <Text style={{ fontWeight: '300', color: t.mutedText }}>Ambit </Text>
+          <Text style={{ fontWeight: '300', color: t.mutedText }}>Garmin </Text>
           <Text style={{ fontWeight: '800', color: t.primary }}>rom1rv</Text>
         </Text>
         <Text style={[styles.navVer, { color: t.mutedText, marginLeft: 8 }]}>v{APP_VERSION}</Text>

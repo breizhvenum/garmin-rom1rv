@@ -46,6 +46,7 @@ import { getKnownMagene, setKnownMagene, getProfileSyncMode, setProfileSyncMode,
 import { diffProfile, fmtProfile, PROFILE_LABELS } from '../services/MageneProfileSync';
 import { getAthleteThresholds } from '../services/ApiIntervalsIcu';
 import { syncGarminActivities, GarminActivitySyncState } from '../services/GarminActivityService';
+import { importFromWatch } from '../services/ImportFromWatch';
 import { kailashDeviceProvider } from '../services/devices/KailashDeviceProvider';
 import { ambitBleDeviceProvider } from '../services/devices/AmbitBleDeviceProvider';
 import { decodeDeviceHistory, KailashHistory } from '../services/KailashHistoryReader';
@@ -494,8 +495,35 @@ export default function HomeScreen() {
     if (timeoutTimerRef.current) { clearTimeout(timeoutTimerRef.current); timeoutTimerRef.current = null; }
   }
 
+  // Garmin rom1rv: plugging the watch in reads its newest activities over USB (MTP, read-only) and
+  // imports the new ones, with no button to press. The result is shown in the hero card below.
+  const [watchMsg, setWatchMsg] = useState('');
+  const [watchBusy, setWatchBusy] = useState(false);
+  const watchBusyRef = useRef(false);
+  async function autoWatchImport() {
+    if (watchBusyRef.current) return;
+    watchBusyRef.current = true;
+    stopSearchTimers();
+    setDeviceType('garmin');
+    setConnectError(undefined);
+    setPhase('connect-error');   // not "connected": the card below carries the message
+    setWatchBusy(true);
+    setWatchMsg('Lecture de la montre… (déverrouille-la ; accepte l’autorisation USB si elle apparaît)');
+    try {
+      const r = await importFromWatch(10);
+      setWatchMsg(`${r.onWatch} activité(s) récente(s) sur la montre : ${r.imported} ajoutée(s), ${r.exists} déjà présente(s)` +
+        (r.skipped ? `, ${r.skipped} déjà lue(s)` : '') + (r.deleted ? `, ${r.deleted} supprimée(s) avant` : '') + (r.failed ? `, ${r.failed} illisible(s)` : '') + '.');
+    } catch (e: any) {
+      setWatchMsg(e?.message ?? t.unknownError);
+    } finally {
+      watchBusyRef.current = false;
+      setWatchBusy(false);
+    }
+  }
+
   async function connectFlow(type: 'ambit' | 'garmin') {
     setDeviceType(type);
+    if (type === 'garmin') { await autoWatchImport(); return; }
     setBleAttempt(false);
     setBleConnected(false);          // this is a USB connect path
     bleConnectedRef.current = false;
@@ -1219,16 +1247,16 @@ export default function HomeScreen() {
           whatever the phone's width or font size: the "r" is measured, then the photo is moved. */}
       <View
         onLayout={e => setHdrBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
-        style={[styles.header, { alignSelf: 'center', width: Math.max(winWidth - 24, 200), borderRadius: 18, overflow: 'hidden', backgroundColor: '#000', minHeight: 190, justifyContent: 'center', paddingVertical: 22 }]}>
+        style={[styles.header, { alignSelf: 'center', width: Math.max(winWidth - 24, 200), borderRadius: 18, overflow: 'hidden', backgroundColor: '#000', minHeight: 230, justifyContent: 'flex-end', paddingTop: 0, paddingBottom: 14 }]}>
         {(() => {
-          const HEAD_X = 0.490, HEAD_Y = 0.483, RATIO = 1360 / 764;   // head position in the photo (fractions)
+          const HEAD_X = 0.500, HEAD_Y = 0.607, RATIO = 1376 / 710;   // head position in the photo (fractions)
           const ready = hdrBox.w > 0 && rowBox && rBox;
           const w = Math.max(hdrBox.w * 1.45, hdrBox.h * 1.1 * RATIO, 1);   // always covers the whole banner
           const h = w / RATIO;
           const rx = ready ? rowBox!.x + rBox!.x + rBox!.width / 2 : hdrBox.w / 2;
           const ry = ready ? rowBox!.y + rBox!.y + rBox!.height / 2 : hdrBox.h / 2;
-          const left = Math.min(0, Math.max(hdrBox.w - w, rx - HEAD_X * w));
-          const HEAD_ABOVE = 36;   // the head sits just above the text line
+          const left = Math.min(0, Math.max(hdrBox.w - w, hdrBox.w / 2 - HEAD_X * w));   // rider + sail centered
+          const HEAD_ABOVE = 49;   // the head sits just above the text line
           const top = Math.min(0, Math.max(hdrBox.h - h, ry - HEAD_ABOVE - HEAD_Y * h));
           return <Image source={require('../assets/hero_photo.jpg')} resizeMode="stretch"
             style={{ position: 'absolute', left, top, width: w, height: h }} />;
@@ -1236,7 +1264,7 @@ export default function HomeScreen() {
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.42)' }} />
         <View onLayout={e => setRowBox({ x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y })}
           style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-          <Text style={[styles.appName, { fontWeight: '300', color: '#fff', textShadowColor: '#000', textShadowRadius: 10 }]}>Ambit </Text>
+          <Text style={[styles.appName, { fontWeight: '300', color: '#fff', textShadowColor: '#000', textShadowRadius: 10 }]}>Garmin </Text>
           <Text onLayout={e => setRBox(e.nativeEvent.layout)}
             style={[styles.appName, { fontWeight: '800', color: '#FF4B55', textShadowColor: '#000', textShadowRadius: 10 }]}>r</Text>
           <Text style={[styles.appName, { fontWeight: '800', color: '#FF4B55', textShadowColor: '#000', textShadowRadius: 10 }]}>om1rv</Text>
@@ -1254,7 +1282,7 @@ export default function HomeScreen() {
         }}>
           <Icon name="warning" size={16} color={theme.warning} />
           <Text style={{ flex: 1, fontSize: 13, color: theme.text }}>
-            Pour la première synchronisation de vos activités, merci de connecter la montre avec le câble fourni et l'adaptateur OTG correspondant à votre téléphone.
+            Pour ne pas interférer avec les applis officielles Garmin, la connexion ne se fait qu'au moyen du câble de la montre.
           </Text>
         </View>
       )}
@@ -1302,7 +1330,7 @@ export default function HomeScreen() {
           full-screen splash. `busy` = actively connecting or scanning (spinner, no buttons). ── */}
       {!connected && deviceType !== 'bryton' && (() => {
         const busy = phase === 'connecting';
-        const title = phase === 'searching' ? t.homeSearchingTitle
+        const title = watchMsg ? watchMsg : phase === 'searching' ? t.homeSearchingTitle
           : phase === 'connecting' ? connectingMsg
           : phase === 'connect-error' ? (connectError ?? t.homeNoDeviceTitle)
           : t.homeNoDeviceTitle;
@@ -1318,7 +1346,7 @@ export default function HomeScreen() {
           <Card style={[roomy ? styles.deviceCardRoomyFull : styles.deviceCardCol, styles.deviceCardInner]}>
             <Text style={[styles.deviceName, v3TextStyle]}>{title}</Text>
             {sub.length > 0 && <Text style={[styles.deviceSub, v3MutedStyle]}>{sub}</Text>}
-            {(phase === 'searching' || busy) && (
+            {(phase === 'searching' || busy || watchBusy) && (
               <View style={{ marginTop: 12 }}>
                 <ActivityIndicator size="small" color={theme.text} />
               </View>
@@ -1335,25 +1363,8 @@ export default function HomeScreen() {
                     onPress={Platform.OS === 'ios' ? () => handleBleConnectRef.current() : startSearching}
                     variant="text" grow={false} />
                 )}
-                {phase === 'connect-error' && (
-                  <Button
-                    label={t.homeConnectRetryBtn}
-                    onPress={() => (Platform.OS === 'ios' || bleAttempt) ? handleBleConnectRef.current() : connectFlowRef.current(deviceType === 'garmin' ? 'garmin' : 'ambit')}
-                    variant="text"
-                    grow={false}
-                  />
-                )}
-                {bondedWatches.map(b => (
-                  <Button
-                    key={b.address}
-                    label={t.homeBleConnectWatchBtn(watchPillName(b.name))}
-                    onPress={() => handleBleConnectRef.current(b.address)}
-                    variant="text"
-                    grow={false}
-                  />
-                ))}
-                <Button label={mageneBusy === 'scan' ? 'Searching…' : t.homeBleConnectBtn} onPress={() => setPairMenuOpen(true)}
-                  disabled={mageneBusy === 'scan'} variant="text" grow={false} />
+                <Button label="Lire la montre (câble USB)" onPress={() => autoWatchImport()}
+                  disabled={watchBusy} variant="text" grow={false} />
               </View>
             )}
           </Card>

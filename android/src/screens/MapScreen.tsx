@@ -701,9 +701,11 @@ export default function MapScreen() {
   // GPX built from the activity's SML (the app's own GPX/FIT exports were removed from the menu).
   async function makeGpxFromSml(): Promise<{ path: string; fileName: string } | null> {
     if (!smlPath) { await explainNoSml(); return null; }
-    const base = (smlPath.split('/').pop() ?? `${activity.id}.sml`).replace(/\.(sml|fit)$/i, '');
+    const base = (smlPath.split('/').pop() ?? `${activity.id}.sml`).replace(/\.(sml|fit|gpx)$/i, '');
     let tmp: string;
-    if (/\.fit$/i.test(smlPath)) {
+    if (/\.gpx$/i.test(smlPath)) {
+      tmp = smlPath;   // imported GPX: already a GPX
+    } else if (/\.fit$/i.test(smlPath)) {
       // Garmin: GPX built from the watch's FIT, the Doppler speed kept in <gpxtpx:speed>
       tmp = `${RNFS.CachesDirectoryPath}/${base}_from_fit.gpx`;
       await RNFS.writeFile(tmp, fitToGpx(base64ToBytes(await RNFS.readFile(smlPath, 'base64')), base), 'utf8');
@@ -746,7 +748,7 @@ export default function MapScreen() {
     setShowExportMenu(false);
     if (!smlPath) { await explainNoSml(); return; }
     try {
-      await shareFile(smlPath, /\.fit$/i.test(smlPath) ? 'application/octet-stream' : 'application/xml');
+      await shareFile(smlPath, /\.gpx$/i.test(smlPath) ? 'application/gpx+xml' : /\.fit$/i.test(smlPath) ? 'application/octet-stream' : 'application/xml');
     } catch (e: any) {
       Alert.alert(t.error, t.shareError + e?.message);
     }

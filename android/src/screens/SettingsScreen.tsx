@@ -751,7 +751,7 @@ export default function SettingsScreen() {
         </View>
         <Text style={styles.sectionDesc}>Ajoute une activité à partir d'un fichier .sml sauvegardé (Moveslink2 ou export de l'appli), ou toutes celles d'un dossier.</Text>
         <Button label="Lire la montre (câble USB)…" variant="outline" loading={importBusy} onPress={handleImportWatch} />
-        <Button label="Choisir un fichier FIT…" variant="outline" loading={importBusy} onPress={handleImportSml} />
+        <Button label="Importer un fichier Garmin (FIT ou GPX)…" variant="outline" loading={importBusy} onPress={handleImportSml} />
         {!!importMsg && <Text selectable style={styles.sectionDesc}>{importMsg}</Text>}
       </View>
       {/* 2026-10-21 (Settings split): first card on the screen, each account with its own button. */}

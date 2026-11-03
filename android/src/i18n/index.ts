@@ -96,7 +96,7 @@ const fr = {
   homeTagline: "L'aventure commence dehors.",
   homeNoDeviceTitle:
     "Aucun appareil détecté. Vérifiez le câble et l'appareil, ou utilisez l'app sans appareil.",
-  homeNoDeviceSub: 'Branchez-la en USB, ou recherchez-la en Bluetooth ci-dessous.',
+  homeNoDeviceSub: 'Branchez votre montre Garmin avec le câble USB (adaptateur OTG).',
   // iOS n'a pas d'USB : on ne propose que le Bluetooth, et on explique que les Ambit1/Ambit2
   // (USB uniquement) ne peuvent pas se connecter ici, sinon leur échec de scan BLE est muet.
   homeNoDeviceSubIos:
@@ -281,7 +281,7 @@ const fr = {
     '(accès "App folder"). Ajoutez ces deux Redirect URI : http://localhost (pour l\'app ' +
     'ordinateur) et opensportsync://oauth/dropbox (pour cette app) - la même application ' +
     'sert les deux. Puis collez sa clé et son secret ci-dessous. Seul votre dossier ' +
-    '"AmbitApp Backups" dans Dropbox est utilisé.',
+    '"GarminApp Backups" dans Dropbox est utilisé.',
   cloudGoogleDriveDesc: 'Créez votre propre application gratuite sur console.cloud.google.com ' +
     '(activez l\'API Google Drive, créez un ID client OAuth de type "Desktop app"), puis ' +
     'collez son ID et son secret ci-dessous. Seuls les fichiers créés par cette application ' +
@@ -991,7 +991,7 @@ const en: typeof fr = {
   homeTagline: 'Adventure starts outside.',
   homeNoDeviceTitle:
     'No device detected, please check your cable and device or use app without it.',
-  homeNoDeviceSub: 'Plug it in via USB, or search for it over Bluetooth below.',
+  homeNoDeviceSub: 'Plug in your Garmin watch with the USB cable (OTG adapter).',
   // iOS has no USB, so offer only Bluetooth and spell out that the USB-only Ambit1/Ambit2
   // can't connect here — otherwise their BLE scan just times out with no explanation.
   homeNoDeviceSubIos:
@@ -1207,7 +1207,7 @@ const en: typeof fr = {
   cloudDropboxDesc: 'Register your own free app at dropbox.com/developers/apps (App folder ' +
     'access). Add both Redirect URIs: http://localhost (for the desktop app) and ' +
     'opensportsync://oauth/dropbox (for this app) - the same app serves both. Then paste ' +
-    'its App key and App secret below. Only your own "AmbitApp Backups" folder in Dropbox ' +
+    'its App key and App secret below. Only your own "GarminApp Backups" folder in Dropbox ' +
     'is ever touched.',
   cloudGoogleDriveDesc: 'Register your own free app at console.cloud.google.com (enable the ' +
     'Google Drive API, create an OAuth Client ID of type "Desktop app"), then paste its ' +
