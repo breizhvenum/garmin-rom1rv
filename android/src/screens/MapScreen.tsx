@@ -817,11 +817,20 @@ export default function MapScreen() {
             </ScrollView>
           ) : (
           <ScrollView>
-            <ExportMenuItem styles={styles} label={t.shareSml} onPress={handleShareSml} />
-            <ExportMenuItem styles={styles} label={t.saveSmlDownloads} onPress={handleSaveSmlToDownloads} />
-            <ExportMenuItem styles={styles} label={t.shareGpxFromSml} onPress={handleShareGpxFromSml} />
-            <ExportMenuItem styles={styles} label={t.saveGpxFromSmlDownloads} onPress={handleSaveGpxFromSmlToDownloads} />
-            <ExportMenuItem styles={styles} label="Envoyer à basedevitesse.com (SML)" onPress={handleUploadBdv} />
+            {(() => {
+              // Garmin rom1rv: the session's source file is the watch's FIT (or an imported GPX).
+              const gpxSrc = !!smlPath && /\.gpx$/i.test(smlPath);
+              const fitSrc = !gpxSrc;
+              return (
+                <>
+                  {fitSrc && <ExportMenuItem styles={styles} label="Partager le FIT d’origine" onPress={handleShareSml} />}
+                  {fitSrc && <ExportMenuItem styles={styles} label="Enregistrer le FIT d’origine (Téléchargements)" onPress={handleSaveSmlToDownloads} />}
+                  <ExportMenuItem styles={styles} label={fitSrc ? 'Partager le GPX (converti du FIT, Doppler conservé)' : 'Partager le GPX'} onPress={handleShareGpxFromSml} />
+                  <ExportMenuItem styles={styles} label={fitSrc ? 'Enregistrer le GPX converti du FIT (Téléchargements)' : 'Enregistrer le GPX (Téléchargements)'} onPress={handleSaveGpxFromSmlToDownloads} />
+                  <ExportMenuItem styles={styles} label={`Envoyer à basedevitesse.com (${fitSrc ? 'FIT' : 'GPX'})`} onPress={handleUploadBdv} />
+                </>
+              );
+            })()}
             <ExportMenuItem styles={styles} label={t.uploadStrava}   onPress={handleUploadStrava} />
             <ExportMenuItem styles={styles} label={t.gearSetForActivity} onPress={() => { setShowExportMenu(false); setShowGearPicker(true); }} />
           </ScrollView>

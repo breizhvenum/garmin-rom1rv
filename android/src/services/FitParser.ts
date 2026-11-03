@@ -11,7 +11,7 @@ const BASE: Record<number, { n: number; inv: number }> = {
   5: { n: 4, inv: 0x7fffffff }, 6: { n: 4, inv: 0xffffffff }, 10: { n: 1, inv: 0 }, 11: { n: 2, inv: 0 }, 12: { n: 4, inv: 0 },
 };
 interface Def { little: boolean; global: number; fields: { num: number; size: number; bt: number }[]; devSize: number }
-export interface FitRecord { time: number; lat: number; lon: number; speed: number | null; alt: number | null; hr: number | null; dist: number | null }
+export interface FitRecord { time: number; lat: number; lon: number; speed: number | null; alt: number | null; hr: number | null; cad: number | null; dist: number | null }
 
 function readUInt(v: DataView, o: number, n: number, little: boolean): number {
   if (n === 1) return v.getUint8(o);
@@ -69,7 +69,7 @@ export function parseFit(bytes: Uint8Array): { records: FitRecord[]; sport: stri
     if (d.global === 20 && f[0] !== undefined && f[1] !== undefined && f[253] !== undefined) {
       const sp = f[73] !== undefined ? f[73] / 1000 : f[6] !== undefined ? f[6] / 1000 : null;   // enhanced_speed, else speed (m/s)
       const alt = f[78] !== undefined ? f[78] / 5 - 500 : f[2] !== undefined ? f[2] / 5 - 500 : null;
-      records.push({ time: FIT_EPOCH_MS + f[253] * 1000, lat: f[0] * SEMI, lon: f[1] * SEMI, speed: sp, alt, hr: f[3] ?? null, dist: f[5] !== undefined ? f[5] / 100 : null });
+      records.push({ time: FIT_EPOCH_MS + f[253] * 1000, lat: f[0] * SEMI, lon: f[1] * SEMI, speed: sp, alt, hr: f[3] ?? null, cad: f[4] ?? null, dist: f[5] !== undefined ? f[5] / 100 : null });
     }
   }
   if (records.length < 2) throw new Error('not enough GPS points');
@@ -83,24 +83,33 @@ export function fitToPoints(bytes: Uint8Array): any[] {
     .map(r => ({ lat: r.lat, lon: r.lon, time: r.time, dopplerSpeed: r.speed, sat: null, hdop: null }));
 }
 
-/** GPX 1.1 built from the FIT; the Doppler speed (m/s) stays in <gpxtpx:speed> next to the heart rate. */
+/** GPX 1.1 built from the FIT, laid out like the app's SML->GPX: the Doppler speed (m/s) is kept in
+ *  <speed> inside <extensions> (that is what the analyzer / basedevitesse read), heart rate and cadence
+ *  in gpxtpx:TrackPointExtension. */
 export function fitToGpx(bytes: Uint8Array, name = 'Garmin rom1rv'): string {
   const { records } = parseFit(bytes);
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const out: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<gpx version="1.1" creator="Garmin rom1rv" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">',
-    `<trk><name>${esc(name)}</name><trkseg>`,
+    '<gpx version="1.1" creator="Garmin rom1rv (from FIT)" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">',
+    `  <metadata><time>${new Date(records[0].time).toISOString()}</time></metadata>`,
+    `  <trk><name>${esc(name)}</name>`,
+    '  <trkseg>',
   ];
   for (const r of records) {
     let ext = '';
-    if (r.speed !== null) ext += `<gpxtpx:speed>${r.speed.toFixed(3)}</gpxtpx:speed>`;
-    if (r.hr !== null) ext += `<gpxtpx:hr>${r.hr}</gpxtpx:hr>`;
-    out.push(`<trkpt lat="${r.lat.toFixed(7)}" lon="${r.lon.toFixed(7)}">` +
+    if (r.speed !== null) ext += `<speed>${r.speed.toFixed(2)}</speed>`;
+    if (r.hr !== null || r.cad !== null) {
+      ext += '<gpxtpx:TrackPointExtension>';
+      if (r.hr !== null) ext += `<gpxtpx:hr>${r.hr}</gpxtpx:hr>`;
+      if (r.cad !== null) ext += `<gpxtpx:cad>${r.cad}</gpxtpx:cad>`;
+      ext += '</gpxtpx:TrackPointExtension>';
+    }
+    out.push(`    <trkpt lat="${r.lat.toFixed(7)}" lon="${r.lon.toFixed(7)}">` +
       (r.alt !== null ? `<ele>${r.alt.toFixed(1)}</ele>` : '') + `<time>${new Date(r.time).toISOString()}</time>` +
-      (ext ? `<extensions><gpxtpx:TrackPointExtension>${ext}</gpxtpx:TrackPointExtension></extensions>` : '') + '</trkpt>');
+      (ext ? `<extensions>${ext}</extensions>` : '') + '</trkpt>');
   }
-  out.push('</trkseg></trk></gpx>');
+  out.push('  </trkseg></trk>', '</gpx>', '');
   return out.join('\n');
 }
 
