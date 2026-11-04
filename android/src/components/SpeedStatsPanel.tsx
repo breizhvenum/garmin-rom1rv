@@ -1,11 +1,15 @@
 // Copyright (C) 2026 breizhvenum. Licensed under the GNU GPL v3 (see LICENSE).
 // Part of rom1rv, derived from the Sommet project by skinnie (https://github.com/skinnie/sommet), also GPL v3.
 import React, { useEffect, useRef, useState } from 'react';
+import { WebView } from 'react-native-webview';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import RNFS from 'react-native-fs';
 import { useV3Theme } from '../theme/v3';
 import { readSmlPoints, analyseSession, fetchMeteoVent, SpeedStats } from '../services/SpeedAnalysis';
-import { base64ToBytes, fitToPoints, gpxToPoints } from '../services/FitParser';
+import { base64ToBytes, fitToPoints, gpxToPoints, fitHeartRate, gpxHeartRate } from '../services/FitParser';
+import { shareFile } from '../native/AmbitUsbModule';
+import { captureTrack, buildCaptureHtml } from '../services/CaptureImage';
 
 // Stats of a session under the map, computed from the move's SML with the same method as the user's
 // analyzer (analysegpsarpro16) - speeds in knots. Wind comes from the track, then from Open-Meteo
@@ -18,7 +22,7 @@ const keyOf = (path: string, vmaxOn: boolean, vmaxKts: number, dopplerOn = true)
 
 // The result is also kept on the phone (reading the SML takes ~5 s, so it is done once per activity).
 // Bump the version when the calculation changes so old figures are not shown.
-const STORE_PREFIX = 'speedstats_v3:';
+const STORE_PREFIX = 'speedstats_v4:';
 function store(): any { try { return require('@react-native-async-storage/async-storage').default; } catch (e) { return null; } }
 async function loadStored(path: string): Promise<SpeedStats | null> {
   try { const st = store(); if (!st) return null; const v = await st.getItem(STORE_PREFIX + path); return v ? JSON.parse(v) : null; } catch (e) { return null; }
@@ -35,7 +39,7 @@ const hms = (ms: number) => {
 const CARD = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
 const card = (deg: number | null) => deg === null ? '--' : `${CARD[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16]} (${Math.round(deg)}°)`;
 
-export default function SpeedStatsPanel({ smlPath, onFailed }: { smlPath: string; onFailed: () => void }) {
+export default function SpeedStatsPanel({ smlPath, onFailed, title }: { smlPath: string; onFailed: () => void; title?: string }) {
   const theme = useV3Theme();
   // The acceleration filter (1.8) is always on. The Vmax filter ("filter an aberrant Vmax", ceiling in kts,
   // format 0.0, default 40.0) is ALWAYS on when an activity opens; the box / value only change the current
@@ -70,6 +74,47 @@ export default function SpeedStatsPanel({ smlPath, onFailed }: { smlPath: string
     });
   }, [smlPath, vmaxOn, vmaxKts, dopplerOn]);
 
+  async function readRaw(): Promise<{ raw: any[]; hr: { avg: number; max: number } | null }> {
+    if (isFit) {
+      const bytes = base64ToBytes(await RNFS.readFile(smlPath, 'base64'));
+      return { raw: fitToPoints(bytes), hr: fitHeartRate(bytes) };
+    }
+    if (isGpx) {
+      const xml = await RNFS.readFile(smlPath, 'utf8');
+      return { raw: gpxToPoints(xml), hr: gpxHeartRate(xml) };
+    }
+    return { raw: readSmlPoints(await RNFS.readFile(smlPath, 'utf8')), hr: null };
+  }
+
+  // Capture image of the session (no heart rate): built in a hidden WebView, then shared as a PNG.
+  const [capHtml, setCapHtml] = useState<string | null>(null);
+  const [capBusy, setCapBusy] = useState(false);
+  async function startCapture() {
+    if (capBusy || !stats) return;
+    setCapBusy(true);
+    try {
+      const { raw } = await readRaw();
+      // full figures (Alpha 250 included), same settings as the view
+      const full = analyseSession(raw, stats.windDir, false, dopplerCapable && dopplerOn, vmaxOn ? vmaxKts : null) || stats;
+      const html = buildCaptureHtml(full, captureTrack(raw), title || '');
+      if (alive.current) setCapHtml(html);
+      setTimeout(() => { if (alive.current) { setCapHtml(null); setCapBusy(false); } }, 30000);   // safety net
+    } catch (e) { if (alive.current) { setCapBusy(false); setCapHtml(null); } }
+  }
+  async function onCaptureMsg(msg: string) {
+    setCapHtml(null);
+    try {
+      if (msg.startsWith('PNG:')) {
+        const d = new Date(stats ? stats.date : Date.now());
+        const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+        const path = `${RNFS.CachesDirectoryPath}/rom1rv_speed_${stamp}.png`;
+        await RNFS.writeFile(path, msg.slice(4), 'base64');
+        await shareFile(path, 'image/png');
+      }
+    } catch (e) { /* share cancelled or failed: nothing else to do */ }
+    if (alive.current) setCapBusy(false);
+  }
+
   // Nothing is computed when the activity opens (it is slow on a phone): the button starts it.
   function compute() {
     if (busy) return;
@@ -77,15 +122,13 @@ export default function SpeedStatsPanel({ smlPath, onFailed }: { smlPath: string
     // let "please wait..." draw first: the computation below is synchronous
     setTimeout(async () => {
       try {
-        const raw = isFit
-          ? fitToPoints(base64ToBytes(await RNFS.readFile(smlPath, 'base64')))
-          : isGpx ? gpxToPoints(await RNFS.readFile(smlPath, 'utf8'))
-          : readSmlPoints(await RNFS.readFile(smlPath, 'utf8'));
+        const { raw, hr } = await readRaw();
         // wind of the day first (5 s at most), so the alpha is computed only once
         const m = await Promise.race([fetchMeteoVent(raw), new Promise<null>(r => setTimeout(() => r(null), 5000))]);
         if (!alive.current) return;
         const res = analyseSession(raw, m ? m.dir : null, true, dopplerCapable && dopplerOn, vmaxOn ? vmaxKts : null);   // FIT: Doppler ticked by default; SML keeps positions only
         if (!res) { setBusy(false); onFailed(); return; }
+        res.hrAvg = hr ? hr.avg : null; res.hrMax = hr ? hr.max : null;
         cache.set(k, res);
         saveStored(k, res);
         setStats(res); setBusy(false);
@@ -170,7 +213,17 @@ export default function SpeedStatsPanel({ smlPath, onFailed }: { smlPath: string
   return (
     <View style={s.wrap}>
       <View style={s.card}>
-        <Text style={s.h}>Speed · {date}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <Text style={s.h}>Speed · {date}</Text>
+          <TouchableOpacity onPress={startCapture} disabled={capBusy} hitSlop={{ top: 10, bottom: 10, left: 12, right: 6 }} activeOpacity={0.6} style={{ marginTop: -2, opacity: capBusy ? 0.4 : 0.85 }}>
+            {capBusy
+              ? <ActivityIndicator size="small" color={theme.mutedText} />
+              : <Svg width={20} height={20} viewBox="0 0 24 24">
+                  <Path d="M4 8h3l1.6-2.2h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" fill="none" stroke={theme.mutedText} strokeWidth={1.8} strokeLinejoin="round" />
+                  <Circle cx={12} cy={13.2} r={3.4} fill="none" stroke={theme.mutedText} strokeWidth={1.8} />
+                </Svg>}
+          </TouchableOpacity>
+        </View>
         <View style={s.grid}>
           <Tile label="Distance totale" value={(stats.distanceM / 1000).toFixed(2)} unit="km" />
           <Tile label="Vmax" value={kts(stats.vmax)} unit="kts" big />
@@ -182,10 +235,19 @@ export default function SpeedStatsPanel({ smlPath, onFailed }: { smlPath: string
           <Tile label="V1852m (1 mille)" value={kts(stats.v1852m)} unit="kts" />
           <Tile label="V10km" value={kts(stats.v10000m)} unit="kts" />
           <Tile label="Alpha 500" value={kts(stats.a500)} unit="kts" big />
+          {stats.hrAvg ? <Tile label="♥ FC moyenne" value={String(stats.hrAvg)} unit="bpm" /> : null}
+          {stats.hrMax ? <Tile label="♥ FC max" value={String(stats.hrMax)} unit="bpm" /> : null}
         </View>
         <Text style={s.note}>Vent : {stats.windSource || '--'}{meteo ? ` · ${meteo}` : ''}{!vmaxOn ? ' · Vmax non filtrée' : (vmaxKts !== VMAX_DEFAULT ? ` · plafond ${vmaxKts.toFixed(1)} kts` : '')}</Text>
         {FilterBox}
       </View>
+      {capHtml ? (
+        <View pointerEvents="none" style={{ position: 'absolute', width: 4, height: 4, opacity: 0, overflow: 'hidden' }}>
+          <WebView originWhitelist={['*']} source={{ html: capHtml, baseUrl: 'https://localhost/' }} javaScriptEnabled
+            onMessage={e => onCaptureMsg(e.nativeEvent.data)} onError={() => { setCapHtml(null); setCapBusy(false); }}
+            style={{ width: 4, height: 4 }} />
+        </View>
+      ) : null}
     </View>
   );
 }

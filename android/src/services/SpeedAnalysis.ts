@@ -51,6 +51,7 @@ export interface SpeedStats {
   nJibe: number; nTack: number;
   windDir: number | null; windSource: string; windSure: boolean;
   ranges: Record<string, SpeedRange[]>;
+  hrAvg?: number | null; hrMax?: number | null;   // whole-session heart rate (added by the panel, FIT / GPX only)
 }
 
 // ───────────────────────── reading ─────────────────────────

@@ -147,3 +147,20 @@ export function gpxToPoints(xml: string): any[] {
   pts.sort((a, b) => a.time - b.time);
   return pts;
 }
+
+/** Whole-session heart rate (average, max) from the FIT records; null when the file has no heart rate. */
+export function fitHeartRate(bytes: Uint8Array): { avg: number; max: number } | null {
+  const v = parseFit(bytes).records.map(r => r.hr).filter((h): h is number => h !== null && h > 30 && h < 250);
+  if (!v.length) return null;
+  let sum = 0, max = 0;
+  for (const h of v) { sum += h; if (h > max) max = h; }
+  return { avg: Math.round(sum / v.length), max };
+}
+
+/** Same from a GPX (gpxtpx:hr / hr tags). */
+export function gpxHeartRate(xml: string): { avg: number; max: number } | null {
+  const re = /<(?:gpxtpx:)?hr>\s*(\d+)\s*<\/(?:gpxtpx:)?hr>/g;
+  let m: RegExpExecArray | null, sum = 0, n = 0, max = 0;
+  while ((m = re.exec(xml)) !== null) { const h = +m[1]; if (h > 30 && h < 250) { sum += h; n++; if (h > max) max = h; } }
+  return n ? { avg: Math.round(sum / n), max } : null;
+}
