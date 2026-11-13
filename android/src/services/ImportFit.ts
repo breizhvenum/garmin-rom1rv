@@ -7,6 +7,8 @@ import { extractGpxMetadata } from './GpxParser';
 import { writeGpxFile, adoptFitFile } from './GpxService';
 import { isActivitySynced, isActivityDeleted, markActivitySynced } from '../database/db';
 import { attributeMoveToGear } from './GearAutoAssign';
+import { isFrench as __isFr } from '../i18n';
+const L = (fr: string, en: string): string => (__isFr ? fr : en);
 
 export type ImportFitResult =
   | { status: 'imported'; id: string; distanceM: number; durationS: number }
@@ -29,15 +31,15 @@ export async function importFitFromPath(picked: string): Promise<ImportFitResult
   let bytes: Uint8Array | null = null;
   if (isFit) {
     bytes = base64ToBytes(await RNFS.readFile(picked, 'base64'));
-    try { sport = parseFit(bytes).sport; } catch { throw new Error("Ce fichier n'est pas un FIT exploitable (ou sans trace GPS)."); }
+    try { sport = parseFit(bytes).sport; } catch { throw new Error(L("Ce fichier n'est pas un FIT exploitable (ou sans trace GPS).", "This file is not a usable FIT (or has no GPS track).")); }
     gpx = fitToGpx(bytes, sport || 'Garmin rom1rv');
   } else {
     gpx = await RNFS.readFile(picked, 'utf8');
-    if (!/<gpx[\s>]/i.test(gpx)) throw new Error("Ce fichier n'est ni un FIT ni un GPX.");
+    if (!/<gpx[\s>]/i.test(gpx)) throw new Error(L("Ce fichier n'est ni un FIT ni un GPX.", "This file is neither a FIT nor a GPX."));
     try { gpxToPoints(gpx); } catch { throw new Error('Ce GPX ne contient pas de trace avec horodatage.'); }
   }
   const meta = extractGpxMetadata(gpx);
-  if (!meta.date) throw new Error('Date de la session introuvable dans ce fichier.');
+  if (!meta.date) throw new Error(L('Date de la session introuvable dans ce fichier.', 'Session date not found in this file.'));
   const id = meta.date.replace(/[^0-9T]/g, '').substring(0, 15);   // same id rule as the SML import
 
   if (await isActivityDeleted(id)) return { status: 'deleted', id };

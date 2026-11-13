@@ -70,6 +70,8 @@ import { Card } from '../components/ui/Card';
 import { WeatherCard } from '../components/WeatherCard';
 import { TrackPreview } from '../components/TrackPreview';
 import { NavShell, NavShellItem } from '../navigation/NavShell';
+import { isFrench as __isFr } from '../i18n';
+const L = (fr: string, en: string): string => (__isFr ? fr : en);
 
 // Real, 2026-08-08: Kailash ("Hoopoe") answers the same USB init + 0x0000 device-info
 // commands every Ambit/Traverse does (AmbitUsbModule.kt's SUUNTO_PID_NAMES/
@@ -284,10 +286,10 @@ export default function HomeScreen() {
     const lines = diff.map(d => `${PROFILE_LABELS[d.field]}: ${fmtProfile(d.field, d.device)} → ${fmtProfile(d.field, d.intervals)}`);
     Alert.alert(
       `Synchroniser le profil ${name} ?`,
-      `Ton ${name} a des valeurs différentes de intervals.icu :\n\n${lines.join('\n')}\n\n« Oui » le garde synchronisé à chaque connexion. « Non » le laisse tel quel (tu peux toujours le synchroniser à la main).`,
+      L(`Ton ${name} a des valeurs différentes de intervals.icu :\n\n${lines.join('\n')}\n\n« Oui » le garde synchronisé à chaque connexion. « Non » le laisse tel quel (tu peux toujours le synchroniser à la main).`, `Your ${name} has different values from intervals.icu:\n\n${lines.join('\n')}\n\n“Yes” keeps it synced at every connection. “No” leaves it as is (you can still sync it by hand).`),
       [
-        { text: 'Non, je le ferai moi-même', style: 'cancel', onPress: () => setProfileSyncMode('manual', kind) },
-        { text: 'Oui, garder synchronisé', onPress: async () => { await setProfileSyncMode('auto', kind); await apply(); } },
+        { text: L('Non, je le ferai moi-même', 'No, I\'ll do it myself'), style: 'cancel', onPress: () => setProfileSyncMode('manual', kind) },
+        { text: L('Oui, garder synchronisé', 'Yes, keep it synced'), onPress: async () => { await setProfileSyncMode('auto', kind); await apply(); } },
       ],
       { cancelable: false },
     );
@@ -344,7 +346,7 @@ export default function HomeScreen() {
   const applyMageneProfile = useCallback(async (m: KnownMagene, changes: Partial<MageneProfile>) => {
     try {
       const ok = await withMagene(m.address, () => setMageneProfile(changes));
-      setMageneMsg(ok ? 'Profil synchronisé depuis intervals.icu ✓' : 'Le Magene n’a pas accepté le profil');
+      setMageneMsg(ok ? L('Profil synchronisé depuis intervals.icu ✓', 'Profile synced from intervals.icu ✓') : L('Le Magene n’a pas accepté le profil', 'The Magene did not accept the profile'));
     } catch (e: any) { setMageneMsg(String(e?.message ?? e)); }
   }, []);
 
@@ -528,8 +530,8 @@ export default function HomeScreen() {
     setWatchBusy(true);
     try {
       const r = await importFromWatch(10);
-      setWatchMsg(`${r.onWatch} activité(s) récente(s) sur la montre : ${r.imported} ajoutée(s), ${r.exists} déjà présente(s)` +
-        (r.skipped ? `, ${r.skipped} déjà lue(s)` : '') + (r.deleted ? `, ${r.deleted} supprimée(s) avant` : '') + (r.failed ? `, ${r.failed} illisible(s)` : '') + '.');
+      setWatchMsg(L(`${r.onWatch} activité(s) récente(s) sur la montre : ${r.imported} ajoutée(s), ${r.exists} déjà présente(s)`, `${r.onWatch} recent activity(ies) on the watch: ${r.imported} added, ${r.exists} already present`) +
+        (r.skipped ? L(`, ${r.skipped} déjà lue(s)`, `, ${r.skipped} already read`) : '') + (r.deleted ? L(`, ${r.deleted} supprimée(s) avant`, `, ${r.deleted} deleted before`) : '') + (r.failed ? L(`, ${r.failed} illisible(s)`, `, ${r.failed} unreadable`) : '') + '.');
       setWatchDone(true);
     } catch (e: any) {
       setWatchMsg(e?.message ?? t.unknownError);
@@ -541,7 +543,7 @@ export default function HomeScreen() {
 
   async function connectFlow(type: 'ambit' | 'garmin') {
     setDeviceType(type);
-    if (type === 'garmin') return;   // Garmin rom1rv: nothing starts by itself, the "Charger vos activités" button does it
+    if (type === 'garmin') return;   // Garmin rom1rv: nothing starts by itself, the L("Charger vos activités", "Load your activities") button does it
     setBleAttempt(false);
     setBleConnected(false);          // this is a USB connect path
     bleConnectedRef.current = false;
@@ -1023,7 +1025,7 @@ export default function HomeScreen() {
   const autoSyncOnConnectRef = useRef(autoSyncOnConnect);
   autoSyncOnConnectRef.current = autoSyncOnConnect;
 
-  // "Générer le SML" pressed in an activity that has none: as soon as the watch is connected (now, or
+  // L("Générer le SML", "Generate the SML") pressed in an activity that has none: as soon as the watch is connected (now, or
   // when it gets plugged in), run the full re-read, which writes the .sml files.
   const phaseNowRef = useRef<string>('');
   const busyNowRef = useRef(false);
@@ -1174,7 +1176,7 @@ export default function HomeScreen() {
     // now (mirrors the desktop split). Suunto family (Ambit1/2/3, Traverse, Kailash), USB or BLE;
     // not Garmin. The per-model write rules live in the settings services.
     ...(connected && deviceType === 'ambit'
-      ? [{ id: 'watchSettings', label: 'Réglages de la montre', icon: 'watch' as const, onPress: () => navigation.navigate('WatchSettings') }]
+      ? [{ id: 'watchSettings', label: L('Réglages de la montre', 'Watch settings'), icon: 'watch' as const, onPress: () => navigation.navigate('WatchSettings') }]
       : []),
     // Firmware (2026-08-29, desktop parity): USB-only, HIDDEN over Bluetooth - a bad flash can
     // brick the watch and flashing is cable/USB-OTG only (same brick-safety rule as the desktop's
@@ -1208,7 +1210,7 @@ export default function HomeScreen() {
     // Bryton Aero 60 — its own device-gated items, like the watch's Routes/Sport Modes. Only when
     // the head unit is plugged in. Workouts = the builder; Profile = FTP/LTHR/Max HR reconciliation.
     ...(deviceType === 'bryton'
-      ? [{ id: 'brytonProfile', label: 'Réglages GPS', icon: 'settings' as const, onPress: () => navigation.navigate('Bryton'), group: 'watch' as const }]
+      ? [{ id: 'brytonProfile', label: L('Réglages GPS', 'GPS settings'), icon: 'settings' as const, onPress: () => navigation.navigate('Bryton'), group: 'watch' as const }]
       : []),
     ...(mageneOn
       ? [{ id: 'magene', label: deviceType === 'bryton' ? 'Magene settings' : 'GPS settings', icon: 'settings' as const, onPress: () => navigation.navigate('Magene'), group: 'watch' as const }]
@@ -1235,7 +1237,7 @@ export default function HomeScreen() {
     ...(emberUnlocked
       ? [{ id: 'ember', label: 'Ember', icon: 'ember' as const, onPress: () => navigation.navigate('Ember'), group: 'training' as const }]
       : []),
-    { id: 'health', label: 'Santé', icon: 'health' as const, onPress: () => navigation.navigate('Health'), group: 'training' as const },
+    { id: 'health', label: L('Santé', 'Health'), icon: 'health' as const, onPress: () => navigation.navigate('Health'), group: 'training' as const },
     { id: 'weight', label: 'Poids', icon: 'weight' as const, onPress: () => navigation.navigate('Weight'), group: 'training' as const },
     { id: 'settings', label: t.settingsTitle, icon: 'settings', onPress: () => navigation.navigate('Settings') },
   ];
@@ -1300,7 +1302,7 @@ export default function HomeScreen() {
         }}>
           <Icon name="warning" size={16} color={theme.warning} />
           <Text style={{ flex: 1, fontSize: 13, color: theme.text }}>
-            Pour ne pas interférer avec les applis officielles Garmin, la connexion ne se fait qu'au moyen du câble de la montre.
+            {L('Pour ne pas interférer avec les applis officielles Garmin, la connexion ne se fait qu\'au moyen du câble de la montre.', 'To avoid interfering with the official Garmin apps, the watch is only connected through its cable.')}
           </Text>
           <TouchableOpacity onPress={() => setCableNotice(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Fermer">
             <Text style={{ fontSize: 18, lineHeight: 20, color: theme.mutedText }}>✕</Text>
@@ -1351,7 +1353,7 @@ export default function HomeScreen() {
           full-screen splash. `busy` = actively connecting or scanning (spinner, no buttons). ── */}
       {!connected && deviceType !== 'bryton' && (() => {
         const title = watchBusy ? 'Chargement en cours'
-          : watchDone ? 'Vous pouvez débrancher votre montre.'
+          : watchDone ? L('Vous pouvez débrancher votre montre.', 'You can unplug your watch.')
           : watchMsg;
         const sub = watchDone ? watchMsg : '';
         return (
@@ -1365,7 +1367,7 @@ export default function HomeScreen() {
             )}
             {!watchBusy && (
               <View style={styles.heroButtons}>
-                <Button label="Charger vos activités" onPress={() => autoWatchImport()} grow={false} />
+                <Button label={L(L("Charger vos activités", "Load your activities"), "Load your activities")} onPress={() => autoWatchImport()} grow={false} />
               </View>
             )}
           </Card>
@@ -1405,7 +1407,7 @@ export default function HomeScreen() {
         <Card style={[roomy ? styles.deviceCardRoomy : styles.deviceCardCol, styles.deviceCardInner]}>
           <Text style={[styles.deviceName, v3TextStyle]}>Bryton Aero 60</Text>
           <View style={styles.deviceMetaRow}>
-            <Text style={[styles.deviceSub, v3MutedStyle]}>Connecté en USB</Text>
+            <Text style={[styles.deviceSub, v3MutedStyle]}>{L('Connecté en USB', 'Connected over USB')}</Text>
             <Chip icon="check" label={t.homeDeviceConnectedStatus} />
           </View>
           <Text style={[styles.deviceSub, v3MutedStyle]}>GPS settings and Workouts are in the menu.</Text>
@@ -1449,7 +1451,7 @@ export default function HomeScreen() {
             {mageneStatus
               ? [mageneStatus.battery != null ? `Batterie ${mageneStatus.battery} %` : null,
                  mageneStatus.firmware ? `Firmware ${mageneStatus.firmware}` : null].filter(Boolean).join(' · ') || 'Bluetooth'
-              : 'Bluetooth · réveille-le pour te connecter'}
+              : L('Bluetooth · réveille-le pour te connecter', 'Bluetooth · wake it up to connect')}
           </Text>
           {mageneSync && mageneBusy === 'rides' && (
             <Text style={[styles.deviceSub, v3MutedStyle]}>
@@ -1774,11 +1776,11 @@ export default function HomeScreen() {
             onLongPress={() => {
               if (isBusy) return;
               Alert.alert(
-                'Retélécharger les activités',
+                L('Retélécharger les activités', 'Re-download activities'),
                 'Re-read every activity from the watch and rebuild its track/GPX — this also RESTORES any activities you previously deleted (they come back from the watch). Use it to recover a move or apply a decode fix. This can take a while.',
                 [
-                  { text: 'Annuler', style: 'cancel' },
-                  { text: 'Retélécharger', onPress: () => handleSync(true) },
+                  { text: L('Annuler', 'Cancel'), style: 'cancel' },
+                  { text: L('Retélécharger', 'Re-download'), onPress: () => handleSync(true) },
                 ],
               );
             }}

@@ -34,6 +34,8 @@ import { getCachedPois } from '../services/PoiService';
 import Icon from '../components/ui/Icon';
 import ActivityPanel from '../components/activity/ActivityPanel';
 import SpeedStatsPanel from '../components/SpeedStatsPanel';
+import { isFrench as __isFr } from '../i18n';
+const L = (fr: string, en: string): string => (__isFr ? fr : en);
 
 type Route = RouteProp<RootStackParamList, 'Map'>;
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'Map'>;
@@ -719,8 +721,8 @@ export default function MapScreen() {
 
   // No .sml on disk for this move: say why (what the last sync's SML step did) instead of hiding the entry.
   async function explainNoSml() {
-    Alert.alert('Fichier de la session',
-      'Aucun fichier FIT ou GPX n’existe pour cette activité.\n\nImporte-le depuis Réglages (Importer un fichier), ou recharge tes activités depuis l’accueil avec la montre branchée.');
+    Alert.alert(L('Fichier de la session', 'Session file'),
+      L('Aucun fichier FIT ou GPX n’existe pour cette activité.\n\nImporte-le depuis Réglages (Importer un fichier), ou recharge tes activités depuis l’accueil avec la montre branchée.', 'There is no FIT or GPX file for this activity.\n\nImport it from Settings (Import a file), or reload your activities from the home screen with the watch plugged in.'));
   }
 
   // GPX built from the activity's SML (the app's own GPX/FIT exports were removed from the menu).
@@ -796,8 +798,8 @@ export default function MapScreen() {
     if (!smlPath) { setShowExportMenu(false); await explainNoSml(); return; }
     try {
       const acc = await getBdvAccount();
-      if (!acc) { setShowExportMenu(false); Alert.alert('basedevitesse.com', 'Connecte-toi d\'abord dans Réglages → basedevitesse.com.'); return; }
-      if (!acc.key) { setShowExportMenu(false); Alert.alert('basedevitesse.com', 'Clé de l\'appli absente de cette version.'); return; }
+      if (!acc) { setShowExportMenu(false); Alert.alert('basedevitesse.com', L('Connecte-toi d\'abord dans Réglages → basedevitesse.com.', 'Sign in first in Settings → basedevitesse.com.')); return; }
+      if (!acc.key) { setShowExportMenu(false); Alert.alert('basedevitesse.com', L('Clé de l\'appli absente de cette version.', 'App key missing from this build.')); return; }
       setBdvSending(true);
       // The support list replaces the menu entries INSIDE the same sheet (a second Modal opened while
       // the first one closes is silently dropped on Android).
@@ -837,7 +839,7 @@ export default function MapScreen() {
         <View style={{ backgroundColor: theme.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: Math.round(win.height * 0.85), overflow: 'hidden' }}>
           {bdvPicker ? (
             <ScrollView>
-              <Text style={{ color: theme.text, fontWeight: '600', padding: 16 }}>Support utilisé</Text>
+              <Text style={{ color: theme.text, fontWeight: '600', padding: 16 }}>{L('Support utilisé', 'Gear used')}</Text>
               {bdvPicker.supports.map(sp => (
                 <ExportMenuItem key={sp.id} styles={styles} label={sp.name} onPress={() => sendToBdv(sp.id)} />
               ))}
@@ -850,18 +852,18 @@ export default function MapScreen() {
               const fitSrc = !gpxSrc;
               return (
                 <>
-                  <ExportSection styles={styles} title="Envoyer" />
-                  <ExportMenuItem styles={styles} icon="upload" highlight label="Envoyer à basedevitesse.com" sub={fitSrc ? 'Le fichier FIT de la montre' : 'Le fichier GPX'} onPress={handleUploadBdv} />
-                  <ExportSection styles={styles} title="Partager" />
-                  {fitSrc && <ExportMenuItem styles={styles} icon="upload" label="Fichier FIT d’origine" onPress={handleShareSml} />}
-                  <ExportMenuItem styles={styles} icon="upload" label={fitSrc ? 'GPX avec vitesse Doppler' : 'Fichier GPX'} sub={fitSrc ? 'Converti du FIT' : undefined} onPress={handleShareGpxFromSml} />
-                  <ExportSection styles={styles} title="Enregistrer dans Téléchargements" />
-                  {fitSrc && <ExportMenuItem styles={styles} icon="download" label="Fichier FIT d’origine" onPress={handleSaveSmlToDownloads} />}
-                  <ExportMenuItem styles={styles} icon="download" label={fitSrc ? 'GPX avec vitesse Doppler' : 'Fichier GPX'} onPress={handleSaveGpxFromSmlToDownloads} />
+                  <ExportSection styles={styles} title={L("Envoyer", "Send")} />
+                  <ExportMenuItem styles={styles} icon="upload" highlight label={L("Envoyer à basedevitesse.com", "Send to basedevitesse.com")} sub={fitSrc ? L('Le fichier FIT de la montre', 'The watch\'s FIT file') : L('Le fichier GPX', 'The GPX file')} onPress={handleUploadBdv} />
+                  <ExportSection styles={styles} title={L("Partager", "Share")} />
+                  {fitSrc && <ExportMenuItem styles={styles} icon="upload" label={L("Fichier FIT d’origine", "Original FIT file")} onPress={handleShareSml} />}
+                  <ExportMenuItem styles={styles} icon="upload" label={fitSrc ? L('GPX avec vitesse Doppler', 'GPX with Doppler speed') : L('Fichier GPX', 'GPX file')} sub={fitSrc ? L('Converti du FIT', 'Converted from the FIT') : undefined} onPress={handleShareGpxFromSml} />
+                  <ExportSection styles={styles} title={L("Enregistrer dans Téléchargements", "Save to Downloads")} />
+                  {fitSrc && <ExportMenuItem styles={styles} icon="download" label={L("Fichier FIT d’origine", "Original FIT file")} onPress={handleSaveSmlToDownloads} />}
+                  <ExportMenuItem styles={styles} icon="download" label={fitSrc ? L('GPX avec vitesse Doppler', 'GPX with Doppler speed') : L('Fichier GPX', 'GPX file')} onPress={handleSaveGpxFromSmlToDownloads} />
                 </>
               );
             })()}
-            <ExportSection styles={styles} title="Autres" />
+            <ExportSection styles={styles} title={L("Autres", "Other")} />
             <ExportMenuItem styles={styles} label={t.uploadStrava}   onPress={handleUploadStrava} />
             <ExportMenuItem styles={styles} label={t.gearSetForActivity} onPress={() => { setShowExportMenu(false); setShowGearPicker(true); }} />
           </ScrollView>
@@ -905,7 +907,7 @@ export default function MapScreen() {
         >
           {exporting
             ? <Text style={styles.exportFabText}>…</Text>
-            : <><Icon name="upload" size={20} color="#fff" /><Text style={styles.exportFabLabel}>Exporter / Partager</Text></>}
+            : <><Icon name="upload" size={20} color="#fff" /><Text style={styles.exportFabLabel}>{L('Exporter / Partager', 'Export / Share')}</Text></>}
         </TouchableOpacity>
 
         {(showExportMenu || !!bdvPicker) && exportSheet}
@@ -978,7 +980,7 @@ export default function MapScreen() {
       >
         {exporting
           ? <Text style={styles.exportFabText}>…</Text>
-          : <><Icon name="upload" size={20} color="#fff" /><Text style={styles.exportFabLabel}>Exporter / Partager</Text></>}
+          : <><Icon name="upload" size={20} color="#fff" /><Text style={styles.exportFabLabel}>{L('Exporter / Partager', 'Export / Share')}</Text></>}
       </TouchableOpacity>
 
       {/* ── Menu d'export ── */}
@@ -1052,13 +1054,13 @@ export default function MapScreen() {
         <>
         {!smlPath && (
           <View style={{ margin: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card }}>
-            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>Pas de fichier FIT ou GPX pour cette activité</Text>
+            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>{L('Pas de fichier FIT ou GPX pour cette activité', 'No FIT or GPX file for this activity')}</Text>
             <Text style={{ color: theme.mutedText, fontSize: 13, marginTop: 6 }}>
-              Les statistiques rom1rv Speed et l’envoi à basedevitesse.com ont besoin du fichier de la session. Importe-le depuis Réglages, ou recharge tes activités depuis l’accueil avec la montre branchée.
+              {L('Les statistiques rom1rv Speed et l’envoi à basedevitesse.com ont besoin du fichier de la session. Importe-le depuis Réglages, ou recharge tes activités depuis l’accueil avec la montre branchée.', 'The rom1rv Speed statistics and sending to basedevitesse.com need the session file. Import it from Settings, or reload your activities from the home screen with the watch plugged in.')}
             </Text>
             <TouchableOpacity activeOpacity={0.8} onPress={() => { navigation.navigate('Home' as any); }}
               style={{ marginTop: 10, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Aller à l’accueil</Text>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{L('Aller à l’accueil', 'Go to home')}</Text>
             </TouchableOpacity>
           </View>
         )}
