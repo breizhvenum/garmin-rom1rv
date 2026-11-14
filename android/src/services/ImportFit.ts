@@ -8,7 +8,7 @@ import { writeGpxFile, adoptFitFile } from './GpxService';
 import { isActivitySynced, isActivityDeleted, markActivitySynced } from '../database/db';
 import { attributeMoveToGear } from './GearAutoAssign';
 import { isFrench as __isFr } from '../i18n';
-const L = (fr: string, en: string): string => (__isFr ? fr : en);
+function L(fr: string, en: string): string { return __isFr ? fr : en; } // hoisted: safe to use at module level
 
 export type ImportFitResult =
   | { status: 'imported'; id: string; distanceM: number; durationS: number }

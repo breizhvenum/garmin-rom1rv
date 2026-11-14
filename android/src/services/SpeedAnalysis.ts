@@ -1,5 +1,5 @@
 import { isFrench as __isFr } from '../i18n';
-const L = (fr: string, en: string): string => (__isFr ? fr : en);
+function L(fr: string, en: string): string { return __isFr ? fr : en; } // hoisted: safe to use at module level
 // Copyright (C) 2026 breizhvenum. Licensed under the GNU GPL v3 (see LICENSE).
 // Part of rom1rv, derived from the Sommet project by skinnie (https://github.com/skinnie/sommet), also GPL v3.
 /* eslint-disable */

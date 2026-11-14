@@ -11,7 +11,7 @@ import { base64ToBytes, fitToPoints, gpxToPoints, fitHeartRate, gpxHeartRate } f
 import { shareFile, saveToDownloads } from '../native/AmbitUsbModule';
 import { captureTrack, buildCaptureHtml } from '../services/CaptureImage';
 import { isFrench as __isFr } from '../i18n';
-const L = (fr: string, en: string): string => (__isFr ? fr : en);
+function L(fr: string, en: string): string { return __isFr ? fr : en; } // hoisted: safe to use at module level
 
 // Stats of a session under the map, computed from the move's SML (rom1rv Speed method) - speeds in knots. Wind comes from the track, then from Open-Meteo
 // when reachable (the figures are recomputed with it). No wind inversion / alpha verification here.
