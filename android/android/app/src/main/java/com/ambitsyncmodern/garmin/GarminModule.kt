@@ -387,6 +387,85 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+
+    // ─── FIT activities over USB Mass Storage (Forerunner 245 "Stockage de masse" mode) ────────
+    // usbMode(): "none" (no Garmin on the cable), "mass" (it exposes a USB Mass Storage interface,
+    // class 8) or "other" (MTP / Garmin mode). Needs no permission. The JS side uses it to pick the reader.
+    @ReactMethod
+    fun usbMode(promise: Promise) {
+        try {
+            val um = reactContext.getSystemService(Context.USB_SERVICE) as UsbManager
+            val dev = um.deviceList.values.find { it.vendorId == GARMIN_VID }
+            if (dev == null) { promise.resolve("none"); return }
+            var mass = false
+            for (i in 0 until dev.interfaceCount) if (dev.getInterface(i).interfaceClass == 8) mass = true
+            promise.resolve(if (mass) "mass" else "other")
+        } catch (e: Exception) {
+            promise.resolve("other")
+        }
+    }
+
+    // listFitFiles(limit): the newest .fit files of GARMIN/Activity on the mounted volumes (call connect()
+    // first). Newest = highest name: Garmin names are timestamp-based, so they sort chronologically.
+    @ReactMethod
+    fun listFitFiles(limit: Int, promise: Promise) {
+        executor.execute {
+            try {
+                val found = ArrayList<Pair<Int, String>>()
+                var vi = 0
+                for (device in openDevices) {
+                    for (p in device.partitions) {
+                        val root = p.fileSystem.rootDirectory
+                        val g = findChildCaseInsensitive(root, "Garmin")
+                        val a = g?.let { findChildCaseInsensitive(it, "Activity") }
+                        if (a != null) {
+                            for (f in a.listFiles()) {
+                                if (!f.isDirectory && f.name.endsWith(".fit", ignoreCase = true)) found.add(Pair(vi, f.name))
+                            }
+                        }
+                        vi++
+                    }
+                }
+                found.sortByDescending { it.second.lowercase() }
+                val arr = Arguments.createArray()
+                for (f in found.take(if (limit > 0) limit else found.size)) {
+                    val m = Arguments.createMap()
+                    m.putInt("volumeIndex", f.first)
+                    m.putString("name", f.second)
+                    arr.pushMap(m)
+                }
+                mainResolve(promise, arr)
+            } catch (e: Exception) {
+                mainReject(promise, "GARMIN_LIST_FAILED", e.message ?: "Unknown error listing .fit files")
+            }
+        }
+    }
+
+    // copyFitToCache(volumeIndex, name): copies one .fit file of GARMIN/Activity to the app's cache and
+    // returns its path (the watch is not modified).
+    @ReactMethod
+    fun copyFitToCache(volumeIndex: Int, name: String, promise: Promise) {
+        executor.execute {
+            try {
+                val (device, off) = deviceAndPartitionForVolumeIndex(volumeIndex)
+                if (device == null) { mainReject(promise, "GARMIN_FILE_NOT_FOUND", "Volume not found"); return@execute }
+                val root = device.partitions[off].fileSystem.rootDirectory
+                val g = findChildCaseInsensitive(root, "Garmin")
+                val a = g?.let { findChildCaseInsensitive(it, "Activity") }
+                val file = a?.let { findChildCaseInsensitive(it, name) }
+                if (file == null) { mainReject(promise, "GARMIN_FILE_NOT_FOUND", "$name not found"); return@execute }
+                val dir = java.io.File(reactContext.cacheDir, "garmin_msc")
+                dir.mkdirs()
+                val dest = java.io.File(dir, name.replace(Regex("[^A-Za-z0-9._-]"), "_"))
+                if (dest.exists()) dest.delete()
+                dest.writeBytes(readUsbFileFully(file))
+                mainResolve(promise, dest.absolutePath)
+            } catch (e: Exception) {
+                mainReject(promise, "GARMIN_READ_FAILED", e.message ?: "Unknown error reading $name")
+            }
+        }
+    }
+
     // ─── internal helpers ────────────────────────────────────────────────────
 
     private fun resolveVolumeActivityDir(volumeIndex: Int): UsbFile? {

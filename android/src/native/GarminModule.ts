@@ -94,3 +94,20 @@ export function writeGpxToSdCard(volumeIndex: number, fileName: string, gpxConte
 export function disconnect(): Promise<boolean> {
   return NativeGarmin.disconnect();
 }
+
+/** "none" (no Garmin on the cable), "mass" (USB Mass Storage mode) or "other" (MTP / Garmin mode). */
+export function usbMode(): Promise<'none' | 'mass' | 'other'> {
+  return NativeGarmin.usbMode();
+}
+
+export interface GarminFitFile { volumeIndex: number; name: string }
+
+/** The newest .fit files of GARMIN/Activity (Mass Storage mode; call connect() first). */
+export function listFitFiles(limit: number): Promise<GarminFitFile[]> {
+  return NativeGarmin.listFitFiles(limit);
+}
+
+/** Copies one .fit file to the app's cache and returns its path. */
+export function copyFitToCache(volumeIndex: number, name: string): Promise<string> {
+  return NativeGarmin.copyFitToCache(volumeIndex, name);
+}
