@@ -65,35 +65,46 @@ class GarminMtpModule(private val reactContext: ReactApplicationContext) :
 
     // Finds the watch, asks the USB permission if needed, then runs `action` with it.
     private fun withGarmin(promise: Promise, action: (UsbDevice) -> Unit) {
-        val device = findGarmin()
-        if (device == null) {
-            promise.reject("GARMIN_NOT_FOUND", "Aucune montre Garmin détectée. Vérifie le câble (OTG), et que la montre est allumée et déverrouillée.")
-            return
+        // On déplace la recherche dans le thread d'arrière-plan pour ne pas geler l'UI
+        // et on attend que la montre apparaisse (jusqu'à 15 secondes).
+        executor.execute {
+            var device: UsbDevice? = null
+            val deadline = System.currentTimeMillis() + 15000L
+            while (System.currentTimeMillis() < deadline) {
+                device = findGarmin()
+                if (device != null) break
+                try { Thread.sleep(500) } catch (_: InterruptedException) {}
+            }
+
+            if (device == null) {
+                promise.reject("GARMIN_NOT_FOUND", "Aucune montre Garmin détectée. Vérifie le câble (OTG), et que la montre est allumée et déverrouillée.")
+                return@execute
+            }
+            val um = usbManager()
+            if (um.hasPermission(device)) {
+                action(device)
+                return@execute
+            }
+            pendingPromise = promise
+            pendingAction = action
+            
+            // CORRECTION ANDROID 14 : Utilisation de FLAG_IMMUTABLE au lieu de FLAG_MUTABLE
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            
+            val intent = Intent(ACTION_GARMIN_MTP_PERMISSION).setPackage(reactContext.packageName)
+            val pi = PendingIntent.getBroadcast(reactContext, 1, intent, flags)
+            val filter = IntentFilter(ACTION_GARMIN_MTP_PERMISSION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                reactContext.registerReceiver(permissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                reactContext.registerReceiver(permissionReceiver, filter)
+            }
+            um.requestPermission(device, pi)
         }
-        val um = usbManager()
-        if (um.hasPermission(device)) {
-            action(device)
-            return
-        }
-        pendingPromise = promise
-        pendingAction = action
-        
-        // CORRECTION ANDROID 14 : Utilisation de FLAG_IMMUTABLE au lieu de FLAG_MUTABLE
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        
-        val intent = Intent(ACTION_GARMIN_MTP_PERMISSION).setPackage(reactContext.packageName)
-        val pi = PendingIntent.getBroadcast(reactContext, 1, intent, flags)
-        val filter = IntentFilter(ACTION_GARMIN_MTP_PERMISSION)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            reactContext.registerReceiver(permissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            reactContext.registerReceiver(permissionReceiver, filter)
-        }
-        um.requestPermission(device, pi)
     }
 
     private fun openMtp(device: UsbDevice): MtpDevice {
