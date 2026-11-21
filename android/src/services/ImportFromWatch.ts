@@ -53,11 +53,9 @@ async function importFromMassStorage(limit: number): Promise<WatchImportResult> 
   return res;
 }
 
-export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
-  let mode: string = 'other';
-  try { mode = await Garmin.usbMode(); } catch (e) { /* unknown: try MTP like before */ }
-  if (mode === 'mass') return importFromMassStorage(limit);
-
+/** Watch in MTP mode (the default for most modern Garmin watches). Reads the .fit files
+ *  directly over the MTP protocol. */
+async function importFromMtp(limit: number): Promise<WatchImportResult> {
   const res: WatchImportResult = { onWatch: 0, imported: 0, exists: 0, deleted: 0, failed: 0, skipped: 0 };
   try {
     const files = await mtpList(limit);
@@ -66,4 +64,15 @@ export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
     await mtpClose().catch(() => {});
   }
   return res;
+}
+
+export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
+  // 1. On essaie d'abord le MTP (le mode par défaut de la plupart des Garmin)
+  try {
+    return await importFromMtp(limit);
+  } catch (e) {
+    // 2. Si le MTP échoue (ex: la montre est en mode "Stockage de masse"), on bascule sur le Stockage de masse.
+    console.log("MTP import failed, falling back to Mass Storage:", e);
+    return await importFromMassStorage(limit);
+  }
 }
