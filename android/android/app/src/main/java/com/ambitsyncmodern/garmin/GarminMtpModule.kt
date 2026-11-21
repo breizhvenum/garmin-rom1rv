@@ -77,7 +77,7 @@ class GarminMtpModule(private val reactContext: ReactApplicationContext) :
             }
 
             if (device == null) {
-                promise.reject("GARMIN_NOT_FOUND", "Aucune montre Garmin détectée. Vérifie le câble (OTG), et que la montre est allumée et déverrouillée.")
+                promise.reject("GARMIN_NOT_FOUND", "Aucune montre Garmin détectée. Vérifie le câble, que la montre est allumée et déverrouillée puis recharge les activités")
                 return@execute
             }
             val um = usbManager()
@@ -111,11 +111,11 @@ class GarminMtpModule(private val reactContext: ReactApplicationContext) :
         try { mtp?.close() } catch (_: Exception) {}
         mtp = null
         val conn = usbManager().openDevice(device)
-            ?: throw Exception("Impossible d'ouvrir la connexion USB avec la montre.")
+            ?: throw Exception("Impossible d'ouvrir la connexion USB avec la montre à ce stade. Recharger les activités à nouveau")
         val d = MtpDevice(device)
         if (!d.open(conn)) {
             conn.close()
-            throw Exception("La montre ne répond pas en MTP. Déverrouille-la et vérifie qu'elle est en mode USB « transfert de fichiers ».")
+            throw Exception("La montre ne répond pas en MTP. Déverrouille-la et vérifie qu'elle est en mode USB « transfert de fichiers ». Recharger les activités à nouveau")
         }
         mtp = d
         return d
