@@ -99,10 +99,18 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
         }
 
         pendingConnectPromise = promise
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+        
+        // CORRECTION ANDROID 14 : Utilisation de FLAG_IMMUTABLE au lieu de FLAG_MUTABLE
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        
         val permissionIntent = PendingIntent.getBroadcast(
             reactContext, 0, Intent(ACTION_GARMIN_USB_PERMISSION), flags
         )
+        
         val filter = IntentFilter(ACTION_GARMIN_USB_PERMISSION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             reactContext.registerReceiver(usbPermissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)

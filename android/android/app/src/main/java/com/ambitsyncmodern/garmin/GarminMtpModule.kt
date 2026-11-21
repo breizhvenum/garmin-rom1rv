@@ -77,7 +77,14 @@ class GarminMtpModule(private val reactContext: ReactApplicationContext) :
         }
         pendingPromise = promise
         pendingAction = action
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+        
+        // CORRECTION ANDROID 14 : Utilisation de FLAG_IMMUTABLE au lieu de FLAG_MUTABLE
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        
         val intent = Intent(ACTION_GARMIN_MTP_PERMISSION).setPackage(reactContext.packageName)
         val pi = PendingIntent.getBroadcast(reactContext, 1, intent, flags)
         val filter = IntentFilter(ACTION_GARMIN_MTP_PERMISSION)
