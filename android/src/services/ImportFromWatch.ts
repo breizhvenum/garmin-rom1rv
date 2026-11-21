@@ -57,13 +57,28 @@ async function importFromMassStorage(limit: number): Promise<WatchImportResult> 
  *  directly over the MTP protocol. */
 async function importFromMtp(limit: number): Promise<WatchImportResult> {
   const res: WatchImportResult = { onWatch: 0, imported: 0, exists: 0, deleted: 0, failed: 0, skipped: 0 };
-  try {
-    const files = await mtpList(limit);
-    await importFiles(files.map(f => f.name), i => mtpCopy(files[i].handle, files[i].name), res);
-  } finally {
-    await mtpClose().catch(() => {});
+  
+  // On essaie 3 fois, avec 2 secondes d'attente entre chaque essai
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const files = await mtpList(limit);
+      await importFiles(files.map(f => f.name), i => mtpCopy(files[i].handle, files[i].name), res);
+      return res; // Succès, on sort de la boucle
+    } catch (e: any) {
+      console.log(`MTP attempt ${attempt} failed:`, e.message);
+      if (attempt < 3) {
+        // Attendre 2 secondes avant de réessayer
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        // Si c'est le 3ème essai et que ça échoue, on propage l'erreur
+        throw e;
+      }
+    } finally {
+      await mtpClose().catch(() => {});
+    }
   }
-  return res;
+  
+  return res; // Ne devrait jamais être atteint
 }
 
 export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
