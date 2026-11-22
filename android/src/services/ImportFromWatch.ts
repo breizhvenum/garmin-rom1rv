@@ -51,6 +51,7 @@ async function importFromMassStorage(limit: number): Promise<WatchImportResult> 
 
 async function importFromMtp(limit: number): Promise<WatchImportResult> {
   const res: WatchImportResult = { onWatch: 0, imported: 0, exists: 0, deleted: 0, failed: 0, skipped: 0 };
+  
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const files = await mtpList(limit);
@@ -71,12 +72,21 @@ async function importFromMtp(limit: number): Promise<WatchImportResult> {
 }
 
 export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
-  // 1. On essaie d'abord le Stockage de masse (pour la Forerunner 245)
+  let mode = 'other';
   try {
-    return await importFromMassStorage(limit);
+    mode = await Garmin.usbMode();
   } catch (e) {
-    // 2. Si le Stockage de masse échoue, on tente le MTP (pour la 255 et autres)
-    console.log("Mass Storage import failed, falling back to MTP:", e);
-    return await importFromMtp(limit);
+    // Si usbMode échoue, on ne sait pas, on fera le fallback classique
+  }
+
+  if (mode === 'mass') {
+    return await importFromMassStorage(limit);
+  } else {
+    try {
+      return await importFromMtp(limit);
+    } catch (e) {
+      console.log("MTP import failed, falling back to Mass Storage:", e);
+      return await importFromMassStorage(limit);
+    }
   }
 }
