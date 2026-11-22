@@ -252,10 +252,6 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     }
 
     // ─── listActivityFiles() ─────────────────────────────────────────────────
-    // Lists files at the given volume's resolved activityPath (from connect()'s
-    // result) — the GPSData DataType's OutputFromUnit location, e.g.
-    // "Garmin/GPX/Current" on André's eTrex 30. Filenames only; read the content
-    // with readActivityFile().
     @ReactMethod
     fun listActivityFiles(volumeIndex: Int, promise: Promise) {
         executor.execute {
@@ -277,9 +273,6 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     }
 
     // ─── readActivityFile() ──────────────────────────────────────────────────
-    // Reads one file's full text content (GPX is plain XML) from the resolved
-    // activity directory. Parsing the GPX itself happens on the JS side, reusing
-    // RouteGpxParser.ts/GpxParser.ts — same as every other GPX source in this app.
     @ReactMethod
     fun readActivityFile(volumeIndex: Int, fileName: String, promise: Promise) {
         executor.execute {
@@ -299,13 +292,6 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     }
 
     // ─── listGpxDirFiles() / readGpxDirFile() ────────────────────────────────
-    // Unlike listActivityFiles()/readActivityFile() (scoped to the resolved
-    // activityPath, e.g. "Garmin/GPX/Current"), these look directly inside
-    // "Garmin/GPX" itself — where saved routes/tracks and BaseCamp-authored
-    // "Waypoints*.gpx" POI files live (confirmed on real hardware, see
-    // GARMIN_USB_IMPORT_SPEC.md). Not recursive, so Current/'s activity files
-    // are naturally excluded. Works on any volume, not just the one carrying
-    // GarminDevice.xml — the SD card can hold its own Garmin/GPX folder too.
     @ReactMethod
     fun listGpxDirFiles(volumeIndex: Int, promise: Promise) {
         executor.execute {
@@ -345,11 +331,6 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     }
 
     // ─── writeGpxToSdCard() ──────────────────────────────────────────────────
-    // Per GARMIN_USB_IMPORT_SPEC.md, confirmed with André 2026-08-07: NEVER write
-    // to internal memory, no exceptions, for routes or POI alike. Only proceeds
-    // if `volumeIndex` refers to a volume WITHOUT GarminDevice.xml (the SD-card
-    // heuristic above) — refuses otherwise, does not silently redirect to
-    // internal memory. fileName should already include the .gpx extension.
     @ReactMethod
     fun writeGpxToSdCard(volumeIndex: Int, fileName: String, gpxContent: String, promise: Promise) {
         executor.execute {
@@ -397,8 +378,6 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
 
 
     // ─── FIT activities over USB Mass Storage (Forerunner 245 "Stockage de masse" mode) ────────
-    // usbMode(): "none" (no Garmin on the cable), "mass" (it exposes a USB Mass Storage interface,
-    // class 8) or "other" (MTP / Garmin mode). Needs no permission. The JS side uses it to pick the reader.
     @ReactMethod
     fun usbMode(promise: Promise) {
         try {
@@ -413,27 +392,35 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    // listFitFiles(limit): the newest .fit files of GARMIN/Activity on the mounted volumes (call connect()
-    // first). Newest = highest name: Garmin names are timestamp-based, so they sort chronologically.
     @ReactMethod
     fun listFitFiles(limit: Int, promise: Promise) {
         executor.execute {
             try {
                 val found = ArrayList<Pair<Int, String>>()
                 var vi = 0
+                var folderFound = false 
                 for (device in openDevices) {
                     for (p in device.partitions) {
                         val root = p.fileSystem.rootDirectory
                         val g = findChildCaseInsensitive(root, "Garmin")
-                        val a = g?.let { findChildCaseInsensitive(it, "Activity") }
-                        if (a != null) {
-                            for (f in a.listFiles()) {
-                                if (!f.isDirectory && f.name.endsWith(".fit", ignoreCase = true)) found.add(Pair(vi, f.name))
-                            }
+                        if (g == null) { vi++; continue } 
+                        
+                        val a = findChildCaseInsensitive(g, "Activity")
+                        if (a == null) { vi++; continue } 
+                        
+                        folderFound = true 
+                        for (f in a.listFiles()) {
+                            if (!f.isDirectory && f.name.endsWith(".fit", ignoreCase = true)) found.add(Pair(vi, f.name))
                         }
                         vi++
                     }
                 }
+                
+                if (!folderFound) {
+                    mainReject(promise, "GARMIN_NO_FOLDER", "Le dossier Garmin/Activity n'a pas été trouvé sur le volume.")
+                    return@execute
+                }
+
                 found.sortByDescending { it.second.lowercase() }
                 val arr = Arguments.createArray()
                 for (f in found.take(if (limit > 0) limit else found.size)) {
@@ -449,24 +436,31 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    // copyFitToCache(volumeIndex, name): copies one .fit file of GARMIN/Activity to the app's cache and
-    // returns its path (the watch is not modified).
     @ReactMethod
     fun copyFitToCache(volumeIndex: Int, name: String, promise: Promise) {
         executor.execute {
             try {
                 val (device, off) = deviceAndPartitionForVolumeIndex(volumeIndex)
-                if (device == null) { mainReject(promise, "GARMIN_FILE_NOT_FOUND", "Volume not found"); return@execute }
+                if (device == null) { mainReject(promise, "GARMIN_FILE_NOT_FOUND", "Volume introuvable"); return@execute }
                 val root = device.partitions[off].fileSystem.rootDirectory
                 val g = findChildCaseInsensitive(root, "Garmin")
-                val a = g?.let { findChildCaseInsensitive(it, "Activity") }
-                val file = a?.let { findChildCaseInsensitive(it, name) }
-                if (file == null) { mainReject(promise, "GARMIN_FILE_NOT_FOUND", "$name not found"); return@execute }
+                if (g == null) { mainReject(promise, "GARMIN_NO_FOLDER", "Dossier Garmin introuvable"); return@execute }
+                val a = findChildCaseInsensitive(g, "Activity")
+                if (a == null) { mainReject(promise, "GARMIN_NO_FOLDER", "Dossier Activity introuvable"); return@execute }
+                val file = findChildCaseInsensitive(a, name)
+                if (file == null) { mainReject(promise, "GARMIN_FILE_NOT_FOUND", "Fichier $name introuvable"); return@execute }
+                
                 val dir = java.io.File(reactContext.cacheDir, "garmin_msc")
                 dir.mkdirs()
                 val dest = java.io.File(dir, name.replace(Regex("[^A-Za-z0-9._-]"), "_"))
                 if (dest.exists()) dest.delete()
-                dest.writeBytes(readUsbFileFully(file))
+                
+                try {
+                    dest.writeBytes(readUsbFileFully(file))
+                } catch (e: Exception) {
+                    mainReject(promise, "GARMIN_READ_FAILED", "Impossible de lire le fichier $name : ${e.message}")
+                    return@execute
+                }
                 mainResolve(promise, dest.absolutePath)
             } catch (e: Exception) {
                 mainReject(promise, "GARMIN_READ_FAILED", e.message ?: "Unknown error reading $name")
@@ -497,8 +491,6 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
         return findChildCaseInsensitive(garminDir, "GPX")
     }
 
-    // volumeIndex was assigned sequentially across (device, partition) pairs in
-    // scanVolumes() — walk the same structure to map it back.
     private fun deviceAndPartitionForVolumeIndex(volumeIndex: Int): Pair<UsbMassStorageDevice?, Int> {
         var i = 0
         for (device in openDevices) {
@@ -546,12 +538,15 @@ private fun readUsbFileFully(file: UsbFile): ByteArray {
     val ins = UsbFileInputStream(file)
     val out = ByteArrayOutputStream()
     val buffer = ByteArray(8192)
+    var totalBytes = 0
     while (true) {
         val n = ins.read(buffer)
         if (n < 0) break
         out.write(buffer, 0, n)
+        totalBytes += n
     }
     ins.close()
+    println("GarminModule: Lu $totalBytes octets pour ${file.name}")
     return out.toByteArray()
 }
 
@@ -562,13 +557,6 @@ private data class ParsedGarminDevice(
     val activityPath: String?,
 )
 
-/**
- * Parses the fields confirmed against real hardware (see GARMIN_USB_IMPORT_SPEC.md):
- * Model/Description, Model/SoftwareVersion (formatted with an implied decimal point
- * two digits from the right, e.g. 501 -> "5.01"), Model/PartNumber, and the GPSData
- * DataType's OutputFromUnit File/Location/Path (the recorded-activity folder — NOT
- * the InputToUnit one, which is for writing waypoints/routes onto the device).
- */
 private fun parseGarminDeviceXml(bytes: ByteArray): ParsedGarminDevice? {
     return try {
         val factory = XmlPullParserFactory.newInstance()
@@ -634,10 +622,6 @@ private fun parseGarminDeviceXml(bytes: ByteArray): ParsedGarminDevice? {
     }
 }
 
-/** "501" -> "5.01", implied decimal point two digits from the right — Garmin's
- * convention, confirmed against André's real eTrex 30 (SoftwareVersion 501 matches
- * the device's own "5.01" firmware version). Not yet confirmed universal across all
- * Garmin device generations — see GARMIN_USB_IMPORT_SPEC.md. */
 private fun formatSoftwareVersion(raw: String): String {
     val digits = raw.trim()
     if (digits.length <= 2) return "0.${digits.padStart(2, '0')}"
