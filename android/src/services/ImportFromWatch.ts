@@ -5,8 +5,6 @@ import * as Garmin from '../native/GarminModule';
 import { isFrench as __isFr } from '../i18n';
 function L(fr: string, en: string): string { return __isFr ? fr : en; } // hoisted: safe at module level
 
-// Reads the newest activities of the watch over the USB cable (MTP, read-only) and imports the ones not
-// seen yet. The names already handled are remembered so a file is never downloaded twice.
 const SEEN_KEY = 'garmin_mtp_seen_v1';
 function store(): any { try { return require('@react-native-async-storage/async-storage').default; } catch (e) { return null; } }
 async function loadSeen(): Promise<string[]> {
@@ -30,14 +28,12 @@ async function importFiles(
       const path = await copy(i);
       const r = await importFitFromPath(path);
       if (r.status === 'imported') res.imported++; else if (r.status === 'exists') res.exists++; else res.deleted++;
-      seen.push(name);   // imported, already there or deleted by the user: no need to download it again
-    } catch (e) { res.failed++; }   // e.g. a non-GPS activity (no track): shown as failed, retried next time
+      seen.push(name); 
+    } catch (e) { res.failed++; } 
   }
   await saveSeen(seen);
 }
 
-/** Watch in "Stockage de masse" / USB Mass Storage mode (e.g. Forerunner 245): the watch is a disk, the
- *  .fit files are read from GARMIN/Activity. Not yet run against a real watch. */
 async function importFromMassStorage(limit: number): Promise<WatchImportResult> {
   const res: WatchImportResult = { onWatch: 0, imported: 0, exists: 0, deleted: 0, failed: 0, skipped: 0 };
   try {
@@ -53,41 +49,34 @@ async function importFromMassStorage(limit: number): Promise<WatchImportResult> 
   return res;
 }
 
-/** Watch in MTP mode (the default for most modern Garmin watches). Reads the .fit files
- *  directly over the MTP protocol. */
 async function importFromMtp(limit: number): Promise<WatchImportResult> {
   const res: WatchImportResult = { onWatch: 0, imported: 0, exists: 0, deleted: 0, failed: 0, skipped: 0 };
-  
-  // On essaie 3 fois, avec 2 secondes d'attente entre chaque essai
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const files = await mtpList(limit);
       await importFiles(files.map(f => f.name), i => mtpCopy(files[i].handle, files[i].name), res);
-      return res; // Succès, on sort de la boucle
+      return res;
     } catch (e: any) {
       console.log(`MTP attempt ${attempt} failed:`, e.message);
       if (attempt < 3) {
-        // Attendre 2 secondes avant de réessayer
         await new Promise(resolve => setTimeout(resolve, 2000));
       } else {
-        // Si c'est le 3ème essai et que ça échoue, on propage l'erreur
         throw e;
       }
     } finally {
       await mtpClose().catch(() => {});
     }
   }
-  
-  return res; // Ne devrait jamais être atteint
+  return res;
 }
 
 export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
-  // 1. On essaie d'abord le MTP (le mode par défaut de la plupart des Garmin)
+  // 1. On essaie d'abord le Stockage de masse (pour la Forerunner 245)
   try {
-    return await importFromMtp(limit);
-  } catch (e) {
-    // 2. Si le MTP échoue (ex: la montre est en mode "Stockage de masse"), on bascule sur le Stockage de masse.
-    console.log("MTP import failed, falling back to Mass Storage:", e);
     return await importFromMassStorage(limit);
+  } catch (e) {
+    // 2. Si le Stockage de masse échoue, on tente le MTP (pour la 255 et autres)
+    console.log("Mass Storage import failed, falling back to MTP:", e);
+    return await importFromMtp(limit);
   }
 }
