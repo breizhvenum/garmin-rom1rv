@@ -77,7 +77,7 @@ class GarminMtpModule(private val reactContext: ReactApplicationContext) :
             }
 
             if (device == null) {
-                promise.reject("GARMIN_NOT_FOUND", "Aucune montre Garmin détectée. Vérifie le câble, que la montre est allumée et déverrouillée puis recharge les activités")
+                promise.reject("GARMIN_NOT_FOUND", "Aucune montre Garmin détectée. Vérifie le câble, que la montre est allumée et déverrouillée puis recharge les activités [USB vus : ${describeUsbDevices(reactContext)}]")
                 return@execute
             }
             val um = usbManager()

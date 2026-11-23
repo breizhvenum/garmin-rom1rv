@@ -89,7 +89,7 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
         val usbManager = reactContext.getSystemService(Context.USB_SERVICE) as UsbManager
         val garmin: UsbDevice? = usbManager.deviceList.values.find { it.vendorId == GARMIN_VID }
         if (garmin == null) {
-            promise.reject("GARMIN_NOT_FOUND", "No Garmin device detected. Check the USB cable and that the device is powered on.")
+            promise.reject("GARMIN_NOT_FOUND", "No Garmin device detected. Check the USB cable and that the device is powered on. [USB seen: ${describeUsbDevices(reactContext)}]")
             return
         }
 
@@ -628,4 +628,18 @@ private fun formatSoftwareVersion(raw: String): String {
     val whole = digits.substring(0, digits.length - 2)
     val frac = digits.substring(digits.length - 2)
     return "$whole.$frac"
+}
+// Diagnostic for "no Garmin found": every USB device the phone sees (vendor:product and interface classes).
+// A Garmin shows up as 091e:xxxx; class 8 = Mass Storage, 6 = MTP/PTP.
+internal fun describeUsbDevices(context: Context): String {
+    return try {
+        val um = context.getSystemService(Context.USB_SERVICE) as UsbManager
+        val list = um.deviceList.values
+        if (list.isEmpty()) "none" else list.joinToString("; ") { d ->
+            String.format("%04x:%04x", d.vendorId, d.productId) + " classes=" +
+                (0 until d.interfaceCount).joinToString(",") { d.getInterface(it).interfaceClass.toString() }
+        }
+    } catch (e: Exception) {
+        "unavailable"
+    }
 }
