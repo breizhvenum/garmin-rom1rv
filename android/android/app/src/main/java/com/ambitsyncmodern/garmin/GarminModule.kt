@@ -1,5 +1,6 @@
 package com.ambitsyncmodern.garmin
 
+import android.app.Activity
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,6 +9,9 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.os.Environment
+import android.os.storage.StorageManager
+import androidx.documentfile.provider.DocumentFile
 import com.facebook.react.bridge.*
 import me.jahnen.libaums.core.UsbMassStorageDevice
 import me.jahnen.libaums.core.fs.UsbFile
@@ -36,6 +40,9 @@ import java.util.concurrent.Executors
 
 private const val GARMIN_VID = 2334 // 0x091E, confirmed on real hardware — see device_filter.xml
 private const val ACTION_GARMIN_USB_PERMISSION = "com.ambitsyncmodern.GARMIN_USB_PERMISSION"
+private const val GARMIN_SAF_PREFS = "garmin_saf"
+private const val GARMIN_SAF_TREE = "treeUri"
+private const val GARMIN_SAF_REQUEST_TREE = 0x6245
 
 data class GarminVolumeInfo(
     val volumeIndex: Int,
@@ -47,7 +54,7 @@ data class GarminVolumeInfo(
 )
 
 class GarminModule(private val reactContext: ReactApplicationContext) :
-    ReactContextBaseJavaModule(reactContext) {
+    ReactContextBaseJavaModule(reactContext), ActivityEventListener {
 
     private val executor = Executors.newSingleThreadExecutor()
     private var pendingConnectPromise: Promise? = null
@@ -56,6 +63,13 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     // mounted volumes without re-scanning USB every time. Closed explicitly by disconnect().
     private var openDevices: List<UsbMassStorageDevice> = emptyList()
     private var volumeInfos: List<GarminVolumeInfo> = emptyList()
+    // Some phones mount the Forerunner's FAT volume themselves. In that case the
+    // kernel owns the block device and libaums cannot initialise it; SAF is the
+    // supported way to access that already-mounted volume.
+    private var safRoot: DocumentFile? = null
+    private var pendingSafPromise: Promise? = null
+
+    init { reactContext.addActivityEventListener(this) }
 
     override fun getName() = "GarminModule"
 
@@ -63,6 +77,94 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     // every start). Events are sent through RCTDeviceEventEmitter, so there's nothing to track.
     @ReactMethod fun addListener(eventName: String) {}
     @ReactMethod fun removeListeners(count: Int) {}
+
+    private fun savedSafRoot(): DocumentFile? {
+        val raw = reactContext.getSharedPreferences(GARMIN_SAF_PREFS, Context.MODE_PRIVATE)
+            .getString(GARMIN_SAF_TREE, null) ?: return null
+        val uri = android.net.Uri.parse(raw)
+        val granted = reactContext.contentResolver.persistedUriPermissions.any {
+            it.uri == uri && it.isReadPermission
+        }
+        return if (granted) DocumentFile.fromTreeUri(reactContext, uri) else null
+    }
+
+    private fun clearSavedSafRoot() {
+        reactContext.getSharedPreferences(GARMIN_SAF_PREFS, Context.MODE_PRIVATE).edit()
+            .remove(GARMIN_SAF_TREE).apply()
+    }
+
+    private fun safActivityDirectory(root: DocumentFile?): DocumentFile? {
+        // Android's folder picker may hand us either the storage root (which
+        // contains GARMIN), or GARMIN itself when the user opens that folder
+        // before tapping "Use this folder". Both are valid Forerunner roots.
+        if (root?.name?.equals("Garmin", ignoreCase = true) == true) {
+            return findDocumentChild(root, "Activity")
+        }
+        val garmin = root?.let { findDocumentChild(it, "Garmin") } ?: return null
+        return findDocumentChild(garmin, "Activity")
+    }
+
+    private fun useSafRoot(root: DocumentFile, promise: Promise) {
+        if (safActivityDirectory(root) == null) {
+            promise.reject("NOT_GARMIN", "That folder is not a Garmin watch storage root (GARMIN/Activity is missing).")
+            return
+        }
+        safRoot = root
+        openDevices = emptyList()
+        volumeInfos = listOf(GarminVolumeInfo(0, true, "Garmin", null, null, "Garmin/Activity"))
+        mainResolve(promise, buildScanResult(volumeInfos))
+    }
+
+    private fun requestSafRoot(promise: Promise) {
+        val activity = reactContext.currentActivity
+        if (activity == null) { mainReject(promise, "NO_ACTIVITY", "App not in foreground"); return }
+        if (pendingSafPromise != null) { mainReject(promise, "BUSY", "A Garmin connection is already in progress"); return }
+        pendingSafPromise = promise
+        UiThreadUtil.runOnUiThread {
+            try { activity.startActivityForResult(safTreeIntent(), GARMIN_SAF_REQUEST_TREE) }
+            catch (e: Exception) {
+                pendingSafPromise = null
+                mainReject(promise, "PICK_FAILED", e.message ?: "Could not open storage picker")
+            }
+        }
+    }
+
+    override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode != GARMIN_SAF_REQUEST_TREE) return
+        val promise = pendingSafPromise ?: return
+        pendingSafPromise = null
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) { mainReject(promise, "CANCELLED", "No folder selected"); return }
+        try {
+            reactContext.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            reactContext.getSharedPreferences(GARMIN_SAF_PREFS, Context.MODE_PRIVATE).edit()
+                .putString(GARMIN_SAF_TREE, uri.toString()).apply()
+            val root = DocumentFile.fromTreeUri(reactContext, uri)
+                ?: throw IllegalStateException("Could not open selected folder")
+            useSafRoot(root, promise)
+        } catch (e: Exception) { mainReject(promise, "GRANT_FAILED", e.message ?: "Could not use selected folder") }
+    }
+
+    override fun onNewIntent(intent: Intent) {}
+
+    /** Returns the automounted Garmin volume when Android exposes one. This lets a
+     * first Forerunner connection open the right folder picker immediately instead
+     * of waiting for a raw libaums claim that the OS has already made impossible. */
+    private fun autoMountedGarminVolume(): android.os.storage.StorageVolume? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return try {
+            val manager = reactContext.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+            manager.storageVolumes.firstOrNull { volume ->
+                !volume.isPrimary && volume.state == Environment.MEDIA_MOUNTED &&
+                    (volume.getDescription(reactContext).contains("garmin", true) ||
+                        volume.getDescription(reactContext).contains("forerunner", true))
+            }
+        } catch (_: Exception) { null }
+    }
+
+    private fun safTreeIntent(): Intent =
+        try { autoMountedGarminVolume()?.createOpenDocumentTreeIntent() ?: Intent(Intent.ACTION_OPEN_DOCUMENT_TREE) }
+        catch (_: Exception) { Intent(Intent.ACTION_OPEN_DOCUMENT_TREE) }
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -92,6 +194,20 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
             promise.reject("GARMIN_NOT_FOUND", "No Garmin device detected. Check the USB cable and that the device is powered on. [USB seen: ${describeUsbDevices(reactContext)}]")
             return
         }
+
+        // A previous one-time folder grant makes auto-mounted Forerunners work
+        // without another picker or a raw USB claim.
+        savedSafRoot()?.let { root ->
+            if (safActivityDirectory(root) != null) { useSafRoot(root, promise); return }
+            // Do not strand the user with a remembered Downloads/Activity folder.
+            // Ask again immediately, rather than waiting for the raw USB fallback.
+            clearSavedSafRoot()
+            requestSafRoot(promise)
+            return
+        }
+
+        // On devices that auto-mount the Forerunner, prefer SAF immediately.
+        if (autoMountedGarminVolume() != null) { requestSafRoot(promise); return }
 
         if (usbManager.hasPermission(garmin)) {
             scanVolumes(promise)
@@ -147,10 +263,9 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
                     }
                     is ScanOutcome.NotFoundYet -> {
                         if (System.currentTimeMillis() >= deadline) {
-                            mainReject(promise, outcome.code, outcome.message +
-                                " (gave up after ${MOUNT_RETRY_BUDGET_MS / 1000}s — Garmin devices can be slow " +
-                                "to mount; also check the device is set to USB Mass Storage mode under " +
-                                "Setup > Interface, and that the USB connection can supply enough power)")
+                            // The Forerunner 245 is often auto-mounted by Android. Offer
+                            // the storage-root grant instead of reporting a misleading USB failure.
+                            requestSafRoot(promise)
                             return@execute
                         }
                         emitMountWaiting(attempt, (deadline - System.currentTimeMillis()) / 1000)
@@ -376,6 +491,7 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     fun disconnect(promise: Promise) {
         executor.execute {
             closeAllDevices()
+            safRoot = null
             mainResolve(promise, true)
         }
     }
@@ -406,6 +522,21 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     fun listFitFiles(limit: Int, promise: Promise) {
         executor.execute {
             try {
+                val safDir = safActivityDirectory(safRoot)
+                if (safDir != null) {
+                    val files = safDir.listFiles()
+                        .filter { !it.isDirectory && (it.name ?: "").endsWith(".fit", ignoreCase = true) }
+                        .sortedByDescending { (it.name ?: "").lowercase() }
+                    val arr = Arguments.createArray()
+                    for (file in files.take(if (limit > 0) limit else files.size)) {
+                        val m = Arguments.createMap()
+                        m.putInt("volumeIndex", 0)
+                        m.putString("name", file.name)
+                        arr.pushMap(m)
+                    }
+                    mainResolve(promise, arr)
+                    return@execute
+                }
                 val found = ArrayList<Pair<Int, String>>()
                 var vi = 0
                 var folderFound = false 
@@ -450,6 +581,22 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     fun copyFitToCache(volumeIndex: Int, name: String, promise: Promise) {
         executor.execute {
             try {
+                val safDir = safActivityDirectory(safRoot)
+                if (safDir != null) {
+                    val file = findDocumentChild(safDir, name)
+                        ?: run { mainReject(promise, "GARMIN_FILE_NOT_FOUND", "Fichier $name introuvable"); return@execute }
+                    val bytes = reactContext.contentResolver.openInputStream(file.uri)?.use { input ->
+                        val out = ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        while (true) { val n = input.read(buffer); if (n < 0) break; out.write(buffer, 0, n) }
+                        out.toByteArray()
+                    } ?: throw IllegalStateException("Impossible de lire $name")
+                    val dir = java.io.File(reactContext.cacheDir, "garmin_msc").apply { mkdirs() }
+                    val dest = java.io.File(dir, name.replace(Regex("[^A-Za-z0-9._-]"), "_"))
+                    dest.writeBytes(bytes)
+                    mainResolve(promise, dest.absolutePath)
+                    return@execute
+                }
                 val (device, off) = deviceAndPartitionForVolumeIndex(volumeIndex)
                 if (device == null) { mainReject(promise, "GARMIN_FILE_NOT_FOUND", "Volume introuvable"); return@execute }
                 val root = device.partitions[off].fileSystem.rootDirectory
@@ -543,6 +690,9 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
 
 private fun findChildCaseInsensitive(dir: UsbFile, name: String): UsbFile? =
     dir.listFiles().find { it.name.equals(name, ignoreCase = true) }
+
+private fun findDocumentChild(dir: DocumentFile, name: String): DocumentFile? =
+    dir.listFiles().firstOrNull { it.name?.equals(name, ignoreCase = true) == true }
 
 private fun readUsbFileFully(file: UsbFile): ByteArray {
     val ins = UsbFileInputStream(file)
