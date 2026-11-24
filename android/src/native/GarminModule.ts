@@ -111,3 +111,8 @@ export function listFitFiles(limit: number): Promise<GarminFitFile[]> {
 export function copyFitToCache(volumeIndex: number, name: string): Promise<string> {
   return NativeGarmin.copyFitToCache(volumeIndex, name);
 }
+
+/** What the phone sees on USB (vendor:product + interface classes), for error messages. */
+export function usbInfo(): Promise<string> {
+  return NativeGarmin.usbInfo();
+}

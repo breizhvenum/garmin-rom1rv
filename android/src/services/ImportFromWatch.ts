@@ -14,6 +14,18 @@ async function saveSeen(names: string[]): Promise<void> {
   try { const st = store(); if (st) await st.setItem(SEEN_KEY, JSON.stringify(names.slice(-500))); } catch (e) { /* not kept: files are re-checked next time */ }
 }
 
+// Every native step gets a time limit: a USB call that blocks on the watch must end in a message that says
+// WHERE it blocked, not in an endless spinner.
+let lastStep = '';
+function step<T>(label: string, ms: number, p: Promise<T>): Promise<T> {
+  lastStep = label;
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(L(`${label} : pas de réponse de la montre après ${Math.round(ms / 1000)} s`, `${label}: no answer from the watch after ${Math.round(ms / 1000)} s`))), ms);
+    p.then(v => { clearTimeout(timer); resolve(v); }, e => { clearTimeout(timer); reject(e); });
+  });
+}
+const quiet = (p: Promise<any>) => Promise.race([p.catch(() => {}), new Promise(r => setTimeout(r, 3000))]);   // never wait forever when closing
+
 export interface WatchImportResult { onWatch: number; imported: number; exists: number; deleted: number; failed: number; skipped: number }
 
 async function importFiles(
@@ -37,14 +49,14 @@ async function importFiles(
 async function importFromMassStorage(limit: number): Promise<WatchImportResult> {
   const res: WatchImportResult = { onWatch: 0, imported: 0, exists: 0, deleted: 0, failed: 0, skipped: 0 };
   try {
-    await Garmin.connect();
-    const files = await Garmin.listFitFiles(limit);
-    await importFiles(files.map(f => f.name), i => Garmin.copyFitToCache(files[i].volumeIndex, files[i].name), res);
+    await step('connect (USB)', 75000, Garmin.connect());
+    const files = await step('listFitFiles', 30000, Garmin.listFitFiles(limit));
+    await importFiles(files.map(f => f.name), i => step('copyFitToCache', 30000, Garmin.copyFitToCache(files[i].volumeIndex, files[i].name)), res);
     if (files.length === 0) {
       throw new Error(L('Aucun fichier .fit trouvé dans GARMIN/Activity de la montre.', 'No .fit file found in the watch\'s GARMIN/Activity folder.'));
     }
   } finally {
-    await Garmin.disconnect().catch(() => {});
+    await quiet(Garmin.disconnect());
   }
   return res;
 }
@@ -54,8 +66,8 @@ async function importFromMtp(limit: number): Promise<WatchImportResult> {
   
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const files = await mtpList(limit);
-      await importFiles(files.map(f => f.name), i => mtpCopy(files[i].handle, files[i].name), res);
+      const files = await step('mtpList', 45000, mtpList(limit));
+      await importFiles(files.map(f => f.name), i => step('mtpCopy', 30000, mtpCopy(files[i].handle, files[i].name)), res);
       return res;
     } catch (e: any) {
       console.log(`MTP attempt ${attempt} failed:`, e.message);
@@ -65,13 +77,13 @@ async function importFromMtp(limit: number): Promise<WatchImportResult> {
         throw e;
       }
     } finally {
-      await mtpClose().catch(() => {});
+      await quiet(mtpClose());
     }
   }
   return res;
 }
 
-export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
+async function importFromWatchInner(limit: number): Promise<WatchImportResult> {
   let mode = 'other';
   try {
     mode = await Garmin.usbMode();
@@ -88,5 +100,17 @@ export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
       console.log("MTP import failed, falling back to Mass Storage:", e);
       return await importFromMassStorage(limit);
     }
+  }
+}
+export async function importFromWatch(limit = 10): Promise<WatchImportResult> {
+  lastStep = '';
+  try {
+    return await importFromWatchInner(limit);
+  } catch (e: any) {
+    let info = '';
+    try { info = await step('usbInfo', 3000, Garmin.usbInfo()); } catch (e2) { info = '?'; }
+    let mode = '?';
+    try { mode = await step('usbMode', 3000, Garmin.usbMode()); } catch (e2) { /* keep ? */ }
+    throw new Error(`${e?.message ?? e} [${L('étape', 'step')}: ${lastStep || '-'}; mode: ${mode}; USB: ${info}]`);
   }
 }

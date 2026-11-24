@@ -392,6 +392,12 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    // usbInfo(): what the phone sees on USB, for error messages (e.g. "091e:4abb classes=8").
+    @ReactMethod
+    fun usbInfo(promise: Promise) {
+        promise.resolve(describeUsbDevices(reactContext))
+    }
+
     @ReactMethod
     fun listFitFiles(limit: Int, promise: Promise) {
         executor.execute {
