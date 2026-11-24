@@ -183,13 +183,17 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
             val opened = mutableListOf<UsbMassStorageDevice>()
             val infos = mutableListOf<GarminVolumeInfo>()
             var volumeIndex = 0
+            val notes = mutableListOf<String>()   // what happened to each device, shown in the error
+            notes.add("${garminDevices.size} mass-storage device(s)")
 
             for (device in garminDevices) {
                 try {
                     device.init()
                 } catch (e: Exception) {
+                    notes.add("init failed: ${e.javaClass.simpleName} ${e.message}")
                     continue // this LUN/partition failed to init — skip it, don't fail the whole connect
                 }
+                notes.add("init ok, ${device.partitions.size} partition(s)")
                 opened.add(device)
                 for (partition in device.partitions) {
                     val root = partition.fileSystem.rootDirectory
@@ -213,7 +217,7 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
             if (infos.isEmpty()) {
                 closeDevicesList(opened)
                 return ScanOutcome.NotFoundYet("GARMIN_NO_VOLUMES",
-                    "Garmin device detected but no readable volumes yet — still waiting for it to finish mounting")
+                    "Garmin device detected but no readable volumes yet — still waiting for it to finish mounting [" + notes.joinToString(" | ") + "]")
             }
 
             ScanOutcome.Success(opened, infos)
