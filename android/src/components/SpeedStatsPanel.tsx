@@ -55,6 +55,8 @@ export default function SpeedStatsPanel({ smlPath, onFailed, title }: { smlPath:
   const dopplerCapable = isFit || isGpx;
   const k = keyOf(smlPath, vmaxOn, vmaxKts, dopplerOn);
   const [stats, setStats] = useState<SpeedStats | null>(cache.get(keyOf(smlPath, true, VMAX_DEFAULT, true)) ?? null);
+  // The result says the file has no Doppler speed at all: the box is greyed and unticked, speeds come from the positions.
+  const noDoppler = !!(stats && stats.dopplerAvailable === false);
   const [busy, setBusy] = useState(false);
   const [meteo, setMeteo] = useState('');
   const alive = useRef(true);
@@ -184,14 +186,14 @@ export default function SpeedStatsPanel({ smlPath, onFailed, title }: { smlPath:
         <Text style={{ color: theme.text, fontSize: 13, marginLeft: 6 }}>kts</Text>
       </View>
       {dopplerCapable ? (
-        <TouchableOpacity onPress={() => setDopplerOn(v => !v)} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-          <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: theme.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: dopplerOn ? theme.primary : 'transparent' }}>
-            {dopplerOn ? <Text style={{ color: '#fff', fontWeight: '800', lineHeight: 18 }}>✓</Text> : null}
+        <TouchableOpacity onPress={() => { if (!noDoppler) setDopplerOn(v => !v); }} disabled={noDoppler} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, opacity: noDoppler ? 0.4 : 1 }}>
+          <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: theme.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: (dopplerOn && !noDoppler) ? theme.primary : 'transparent' }}>
+            {(dopplerOn && !noDoppler) ? <Text style={{ color: '#fff', fontWeight: '800', lineHeight: 18 }}>✓</Text> : null}
           </View>
           <Text style={{ color: theme.text, fontSize: 13, marginLeft: 10, flexShrink: 1 }}>Doppler</Text>
         </TouchableOpacity>
       ) : null}
-      {dopplerCapable && dopplerOn && stats && !stats.useDoppler ? (
+      {dopplerCapable && stats && (noDoppler || (dopplerOn && !stats.useDoppler)) ? (
         <Text style={{ color: theme.mutedText, fontSize: 12, marginTop: 6, marginLeft: 32 }}>{L('Pas de Doppler dans ce fichier : vitesses calculées à partir des positions.', 'No Doppler in this file: speeds computed from the positions.')}</Text>
       ) : null}
     </View>
