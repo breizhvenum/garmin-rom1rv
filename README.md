@@ -1,3 +1,44 @@
+# Garmin rom1rv
+
+**Garmin rom1rv** is an Android app that reads the activities of a Garmin watch over a USB cable and gives you the speed statistics of your sessions (windsurf, kite, sailing, running…): best speeds over time and distance windows, runs, turns. It can export the FIT or GPX file, share it, and send the session to [basedevitesse.com](https://basedevitesse.com).
+
+**Garmin rom1rv** est une appli Android qui lit les activités d'une montre Garmin par câble USB et calcule les statistiques de vitesse de tes sorties (planche à voile, kite, voile, course…) : meilleures vitesses sur des fenêtres de temps et de distance, runs, empannages. Elle exporte le fichier FIT ou GPX, le partage, et envoie la session sur [basedevitesse.com](https://basedevitesse.com).
+
+## Watches / Montres
+
+| Watch / Montre | Status / État |
+|---|---|
+| Forerunner 255 | Tested, cable (MTP) / Testée, câble (MTP) |
+| Forerunner 245 | Tested, cable (USB mass storage) / Testée, câble (stockage de masse) |
+| Other Garmin watches / Autres montres Garmin | Not tested / Non testées |
+
+Bluetooth is not supported: Garmin does not offer third-party apps a way to read activities that way. Export the original FIT file from Garmin Connect and open it in the app instead.
+
+Le Bluetooth n'est pas géré : Garmin ne permet pas aux applis tierces de lire les activités ainsi. Exporte le fichier FIT original depuis Garmin Connect et ouvre-le dans l'appli.
+
+## Connecting the watch / Connecter la montre
+
+1. Use a **data cable** (not a charge-only one), with a USB-OTG adapter if needed. Unlock the watch. / Utilise un **câble de données** (pas un câble de charge seule), avec un adaptateur USB-OTG si besoin. Déverrouille la montre.
+2. On the watch: *Settings → System → USB Mode*. Try **MTP** if the menu offers it, otherwise **Mass storage / Stockage de masse**. / Sur la montre : *Paramètres → Système → Mode USB*. Essaie **MTP** si le menu le propose, sinon **Stockage de masse**.
+3. Plug the watch in and tap **Load your activities / Charger vos activités**. Accept the USB permission Android asks for. / Branche la montre et appuie sur **Charger vos activités**. Accepte l'autorisation USB demandée par Android.
+4. On some phones Android mounts the watch itself. The app then opens Android's folder picker: choose the watch's storage (the folder that contains `GARMIN`) and tap *Use this folder*. This is asked once. / Sur certains téléphones, Android monte lui-même la montre. L'appli ouvre alors le sélecteur de dossiers d'Android : choisis le stockage de la montre (le dossier qui contient `GARMIN`) puis *Utiliser ce dossier*. C'est demandé une seule fois.
+
+If nothing works, the error message names the step that failed and lists the USB devices the phone sees: send it with your watch model and phone model when you report a problem. / Si rien ne marche, le message d'erreur indique l'étape en échec et les appareils USB vus par le téléphone : joins-le, avec le modèle de ta montre et de ton téléphone, quand tu signales un problème.
+
+## Install / Installation
+
+Download the latest `Garmin_rom1rv_vX.Y.Z.apk` from the [Releases](../../releases) page and install it. The app follows the phone's language (French, otherwise English) and can be switched in *Settings → Language*.
+
+Télécharge le dernier `Garmin_rom1rv_vX.Y.Z.apk` dans la page [Releases](../../releases) et installe-le. L'appli suit la langue du téléphone (français, sinon anglais) et se règle dans *Réglages → Langue*.
+
+## Licence and credits / Licence et crédits
+
+Garmin rom1rv is a fork of **Sommet** by skinnie (see below) and is distributed under the **GNU GPL v3**. The speed analysis, the Garmin reading and the French/English translation are by breizhvenum. Not affiliated with Garmin. Provided as is, without warranty.
+
+Garmin rom1rv est un fork de **Sommet** de skinnie (voir plus bas), distribué sous **GNU GPL v3**. L'analyse de vitesse, la lecture Garmin et la traduction français/anglais sont de breizhvenum. Non affilié à Garmin. Fourni tel quel, sans garantie.
+
+---
+
 # Sommet
 
 Sommet, french name for Peak, is an application to sync and manage Suunto Ambit 1, Ambit 2, Ambit 3, Traverse , Traverse Alpha and Kailash families/variants + Garmin Etrex 10/20/20x/30/30x GPSr.

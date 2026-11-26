@@ -49,7 +49,7 @@ async function importFiles(
 async function importFromMassStorage(limit: number): Promise<WatchImportResult> {
   const res: WatchImportResult = { onWatch: 0, imported: 0, exists: 0, deleted: 0, failed: 0, skipped: 0 };
   try {
-    await step('connect (USB)', 75000, Garmin.connect());
+    await step('connect (USB)', 180000, Garmin.connect());
     const files = await step('listFitFiles', 30000, Garmin.listFitFiles(limit));
     await importFiles(files.map(f => f.name), i => step('copyFitToCache', 30000, Garmin.copyFitToCache(files[i].volumeIndex, files[i].name)), res);
     if (files.length === 0) {
