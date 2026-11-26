@@ -13,7 +13,7 @@ const DOPPLER_MIN_COVERAGE = 0.8;
 const PLANNING_SPEED = 12;
 const WIND_STEP_DEG = 5;
 const MAX_CAP_STD = 15;
-const VMAX_DELTA_KTS = 2.45;
+const VMAX_DELTA_KTS = 2.95;
 const VMAX_ISOLATED_RATIO = 1.20;
 const RAD_TO_DEG = 180 / Math.PI;
 const SML_SPEED_MATCH_MS = 1500;
@@ -45,6 +45,7 @@ export interface SpeedStats {
   durationMs: number;
   distanceM: number;
   useDoppler: boolean;
+  dopplerAvailable?: boolean;   // false: the file has no Doppler speed at all (the panel greys the Doppler box)
   vmax: number; v10s: number; top5x10s: number;
   v100m: number; v500m: number; v1000m: number; v1852m: number; v5000m: number; v10000m: number;
   a250: number; a500: number;
@@ -918,13 +919,14 @@ export function analyseSession(rawPoints: any[], meteoDir: number | null = null,
   let top5 = getTopNAvgSpeedWindowSingleHeading(points, 10, 5, useDoppler, useDoppler ? null : v10s.speed, useDoppler ? null : v10sRange);
   if (!useDoppler && v10s.speed > 0 && top5.speed > v10s.speed + 0.01) top5 = { speed: v10s.speed, ranges: top5.ranges };
   const a250 = light ? none : getAlphaExclu(ptsLong, distLong, 250, 125, useDoppler, windUsed);
-  const a500 = getAlphaExclu(ptsLong, distLong, 500, 250, useDoppler, windUsed);
+  const a500 = getAlphaExclu(ptsLong, distLong, 500, 125, useDoppler, windUsed);
   const ss = light ? { tot: 0, jib: 0, tack: 0, nJibe: 0, nTack: 0, vminJibe: null, vminTack: null, moyJibe: null, moyTack: null } : statsSession(points, windUsed, useDoppler);
   return {
     date: rawPoints[0].time,
     durationMs: rawPoints[rawPoints.length - 1].time - rawPoints[0].time,
     distanceM: totalDist,
     useDoppler,
+    dopplerAvailable: withSpeed > 0,
     vmax, v10s: v10s.speed, top5x10s: top5.speed,
     v100m: v100m.speed, v500m: v500m.speed, v1000m: v1000m.speed, v1852m: v1852m.speed, v5000m: v5000m.speed, v10000m: v10000m.speed,
     a250: a250.speed, a500: a500.speed,
