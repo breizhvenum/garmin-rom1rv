@@ -153,7 +153,7 @@ export default function GarminRouteScreen() {
 
       {/* ── eTrex: convert a GPX so the unit can actually guide you (turn waypoints / smart route) ── */}
       <Section title={t.garminEtrexSection} description={t.garminEtrexDesc}>
-        <View style={styles.row}>
+        <View style={[styles.row, { flexDirection: 'column', alignItems: 'stretch' }]}>
           <Button label={t.garminEtrexTrackBtn} variant="filled" disabled={busy || !sdCardVolume}
             onPress={() => handleSendEtrex('track')} />
           <Button label={t.garminEtrexRouteBtn} variant="outline" disabled={busy || !sdCardVolume}

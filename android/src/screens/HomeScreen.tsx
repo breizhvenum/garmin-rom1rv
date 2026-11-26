@@ -1193,10 +1193,10 @@ export default function HomeScreen() {
     // App-Zone gating as before: Ambit3-family only, connected, not Kailash/Traverse/Ambit1-2.
     // Shown when either switch is on (Intervals = the builder, App Zone = the catalog), like the
     // desktop's NavRail (2026-10-22).
-    ...((expFeatures.intervals || expFeatures.appZone) && connected && deviceType === 'ambit' && !isKailash(ambitInfo) && !isTraverse(ambitInfo) && !isAmbit12(ambitInfo)
+    ...(false && (expFeatures.intervals || expFeatures.appZone) && connected && deviceType === 'ambit' && !isKailash(ambitInfo) && !isTraverse(ambitInfo) && !isAmbit12(ambitInfo)
       ? [{ id: 'apps', label: 'Applis', icon: 'apps' as const, onPress: () => navigation.navigate('Apps') }]
       : []),
-    ...(expFeatures.smartSensor
+    ...(false && expFeatures.smartSensor
       ? [{ id: 'smartSensor', label: t.experimentalSmartSensor, icon: 'link' as const, onPress: () => navigation.navigate('SmartSensor'), group: 'adv' as const }]
       : []),
     // Workout Calendar - same Apps/CustomModes mechanism as Intervals (guided-workout binaries
@@ -1237,7 +1237,8 @@ export default function HomeScreen() {
     ...(emberUnlocked
       ? [{ id: 'ember', label: 'Ember', icon: 'ember' as const, onPress: () => navigation.navigate('Ember'), group: 'training' as const }]
       : []),
-    { id: 'health', label: L('Santé', 'Health'), icon: 'health' as const, onPress: () => navigation.navigate('Health'), group: 'training' as const },
+    // Garmin rom1rv: Santé retiré du menu
+    // { id: 'health', label: L('Santé', 'Health'), icon: 'health' as const, onPress: () => navigation.navigate('Health'), group: 'training' as const },
     { id: 'weight', label: 'Poids', icon: 'weight' as const, onPress: () => navigation.navigate('Weight'), group: 'training' as const },
     { id: 'settings', label: t.settingsTitle, icon: 'settings', onPress: () => navigation.navigate('Settings') },
   ];

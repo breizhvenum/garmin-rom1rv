@@ -76,6 +76,9 @@ import { SettingsSection } from '../components/ui/SettingsSection';
 import { isFrench as __isFr } from '../i18n';
 function L(fr: string, en: string): string { return __isFr ? fr : en; } // hoisted: safe to use at module level
 
+// Garmin rom1rv: hide what only applies to Suunto Ambit watches (apps, Smart Sensor, firmware, testing mode...).
+const GARMIN_ONLY = true;
+
 // Real, 2026-08-09 ("no button to change provider, nor in the settings like the desktop
 // version") - same 3 real choices MapScreen.tsx/TrackMapScreen.tsx's own in-map layer
 // control offers, same MAP_PROVIDER_LABELS names, with this screen's own localized
@@ -788,15 +791,6 @@ export default function SettingsScreen() {
           {L('Pour ne pas interférer avec les applis officielles Garmin, la connexion ne se fait qu\'au moyen du câble de la montre.', 'To avoid interfering with the official Garmin apps, the watch is only connected through its cable.')}
         </Text>
         <ConnectionRow
-          name={t.intervalsSection}
-          connected={intervalsSaved}
-          status={intervalsSaved
-            ? (intervalsAthleteId ? `connected (athlete ${intervalsAthleteId})` : 'connected')
-            : 'not connected'}
-          action={intervalsSaved ? L('Gérer', 'Manage') : L('Configurer', 'Set up')}
-          onPress={() => setOpenConnection('intervals')}
-        />
-        <ConnectionRow
           name="basedevitesse.com"
           connected={!!bdvAccount}
           status={bdvAccount ? (bdvAccount.name || `IDuser ${bdvAccount.idUser}`) : 'not connected'}
@@ -817,16 +811,6 @@ export default function SettingsScreen() {
           action={stravaAuth ? L('Gérer', 'Manage') : L('Connecter', 'Connect')}
           onPress={() => setOpenConnection('strava')}
         />
-        {/* Bluetooth body scale (Etekcity FIT 8S): listened to directly, no account. */}
-        <ConnectionRow
-          name="Bluetooth scale"
-          connected={!!scaleAddr && scaleStatus().listening}
-          status={!scaleAddr ? 'not set up' : scaleStatus().listening ? 'listening' : 'not listening'}
-          action={scaleAddr ? L('Gérer', 'Manage') : L('Configurer', 'Set up')}
-          onPress={() => setScaleOpen(true)}
-        />
-        <ScaleSetupModal visible={scaleOpen} onClose={() => setScaleOpen(false)}
-          onChanged={async () => setScaleAddr(await getScaleAddress())} />
         {/* Dropbox / Google Drive / OneDrive rows removed (André, 2026-08-16): cloud backup is
             now just "save to a folder" on the Backup screen (point it at a cloud sync folder),
             so there's no OAuth "connection" to set up here anymore. */}
@@ -1041,7 +1025,7 @@ export default function SettingsScreen() {
         {/* One switch per experimental feature (André, 2026-08-17). Turning one on opens it right
             away (App Zone should jump straight to the Suunto catalog); once on, tapping its name
             reopens it. */}
-        {EXP_FEATURE_ROWS.map(f => (
+        {EXP_FEATURE_ROWS.filter(f => !GARMIN_ONLY || f.flag === 'coach').map(f => (
           <SidebarSwitch
             key={f.flag}
             title={f.label}
@@ -1055,7 +1039,7 @@ export default function SettingsScreen() {
             no card on Home, not in the pairing list, not offered by Routes - still remembered.
             Plugged-in devices always show. On Android that's the Magene (the desktop also has the
             Bryton Aero 60 and the Wahoo ELEMNT over Bluetooth). */}
-        {isMageneAvailable() && (
+        {!GARMIN_ONLY && isMageneAvailable() && (
           <>
             <View style={{ marginTop: 10 }}>
               <Text style={[styles.connRowText, { fontWeight: '700' }]}>Appareils</Text>
@@ -1412,7 +1396,7 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         {/* ── Suunto Apps Catalog (desktop parity, 2026-10-22). Same import the App Zone screen has. ── */}
-        {isCatalogAvailable() && (
+        {!GARMIN_ONLY && isCatalogAvailable() && (
         <SettingsSection
           title="Suunto Apps Catalog"
           summary={catalogEntries === null ? ''
@@ -1452,6 +1436,7 @@ export default function SettingsScreen() {
         )}
 
         {/* The feature switches moved to "Show in the sidebar" (2026-10-21). */}
+        {!GARMIN_ONLY && (
         <SettingsSection
           title={t.experimentalSection}
           summary={L(`Marquer les entraînements synchronisés : ${markSyncedEnabled ? 'oui' : 'non'}`, `Mark synced workouts: ${markSyncedEnabled ? 'yes' : 'no'}`)}
@@ -1468,10 +1453,12 @@ export default function SettingsScreen() {
           <SwitchLine value={markSyncedEnabled} onValueChange={handleToggleMarkSynced}
             label={markSyncedEnabled ? 'Oui' : 'Non'} a11yLabel={t.markSyncedLabel} accent />
         </SettingsSection>
+        )}
 
         {/* ── Testing mode (2026-08-16, ported from desktop): pretend a device is connected so
             the app can be explored without one. Toggle + a picker of the watches the app knows
             (Ambit3 family / Traverse / Kailash). Default OFF. ── */}
+        {!GARMIN_ONLY && (
         <SettingsSection
           title={t.testingSection}
           summary={demo.enabled ? t.testingOnShowing(demo.device.name) : 'Non'}
@@ -1490,9 +1477,10 @@ export default function SettingsScreen() {
             </View>
           )}
         </SettingsSection>
+        )}
 
         {/* Firmware flashing is USB-only (no USB on iOS), and not for a Garmin. */}
-        {!isGarminAttached && Platform.OS !== 'ios' && (
+        {!GARMIN_ONLY && !isGarminAttached && Platform.OS !== 'ios' && (
         <SettingsSection
           title="Firmware"
           summary="Flash watch firmware over USB"
@@ -1520,10 +1508,6 @@ export default function SettingsScreen() {
           onToggle={toggleSection('devices')}
           onLayout={recordRow('devices')}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.mutedText }} />
-            <Text style={{ fontSize: 12, color: theme.mutedText }}>Suunto Ambit 3 (USB)</Text>
-          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.success }} />
             <Text style={{ fontSize: 12, color: theme.text }}>Garmin eTrex — connected</Text>
