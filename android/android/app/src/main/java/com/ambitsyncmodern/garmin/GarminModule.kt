@@ -43,6 +43,8 @@ private const val ACTION_GARMIN_USB_PERMISSION = "com.ambitsyncmodern.GARMIN_USB
 private const val GARMIN_SAF_PREFS = "garmin_saf"
 private const val GARMIN_SAF_TREE = "treeUri"
 private const val GARMIN_SAF_REQUEST_TREE = 0x6245
+// false: a mass-storage watch opens the folder picker at once. true: old behaviour (raw USB first).
+private const val TRY_DIRECT_USB_FIRST = false
 
 data class GarminVolumeInfo(
     val volumeIndex: Int,
@@ -156,15 +158,54 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
             val manager = reactContext.getSystemService(Context.STORAGE_SERVICE) as StorageManager
             manager.storageVolumes.firstOrNull { volume ->
                 !volume.isPrimary && volume.state == Environment.MEDIA_MOUNTED &&
-                    (volume.getDescription(reactContext).contains("garmin", true) ||
-                        volume.getDescription(reactContext).contains("forerunner", true))
+                    looksLikeGarminName(volume.getDescription(reactContext))
             }
         } catch (_: Exception) { null }
     }
 
-    private fun safTreeIntent(): Intent =
-        try { autoMountedGarminVolume()?.createOpenDocumentTreeIntent() ?: Intent(Intent.ACTION_OPEN_DOCUMENT_TREE) }
-        catch (_: Exception) { Intent(Intent.ACTION_OPEN_DOCUMENT_TREE) }
+    // A volume name that looks like a Garmin watch or device (accents and case ignored). Used to pick
+    // the watch first when several removable volumes (SD card, USB stick...) are mounted.
+    private val garminNameWords = listOf(
+        "garmin", "forerunner", "fenix", "quatix", "vivoactive", "vivosmart", "vivomove", "vivofit",
+        "venu", "epix", "instinct", "enduro", "tactix", "marq", "descent", "etrex", "gpsmap", "foretrex",
+        "fr245", "fr255", "fr55", "fr45", "fr645", "fr945", "fr955"
+    )
+    private fun looksLikeGarminName(raw: String?): Boolean {
+        val name = java.text.Normalizer.normalize(raw ?: return false, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "").lowercase()
+        return garminNameWords.any { name.contains(it) }
+    }
+
+    // A mounted removable, non-primary volume whose name looks like a Garmin device (a watch may not carry
+    // "Garmin" in its name, hence the model-name list). Never any other volume (SD card, USB stick).
+    private fun removableVolumeForPicker(): android.os.storage.StorageVolume? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return try {
+            val manager = reactContext.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+            val candidates = manager.storageVolumes.filter {
+                !it.isPrimary && it.isRemovable && it.state == Environment.MEDIA_MOUNTED
+            }
+            candidates.firstOrNull { looksLikeGarminName(it.getDescription(reactContext)) }
+        } catch (_: Exception) { null }
+    }
+
+    // Opens the folder picker as close to GARMIN as possible; every failure falls back to the
+    // plain picker, so the worst case is the old behaviour.
+    private fun safTreeIntent(): Intent {
+        val plain = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+        return try {
+            val volume = (autoMountedGarminVolume() ?: removableVolumeForPicker()) ?: return plain
+            val intent = volume.createOpenDocumentTreeIntent()
+            val uuid = volume.uuid
+            if (uuid != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent.putExtra(
+                    android.provider.DocumentsContract.EXTRA_INITIAL_URI,
+                    android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "$uuid:GARMIN")
+                )
+            }
+            intent
+        } catch (_: Exception) { plain }
+    }
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -206,6 +247,10 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
             return
         }
 
+        // A watch in mass-storage mode (USB interface class 8) goes straight to the folder picker:
+        // no raw-USB attempt first. MTP devices keep the old path below.
+        val isMassStorage = (0 until garmin.interfaceCount).any { garmin.getInterface(it).interfaceClass == 8 }
+        if (!TRY_DIRECT_USB_FIRST && isMassStorage) { requestSafRoot(promise); return }
         // On devices that auto-mount the Forerunner, prefer SAF immediately.
         if (autoMountedGarminVolume() != null) { requestSafRoot(promise); return }
 
@@ -244,7 +289,7 @@ class GarminModule(private val reactContext: ReactApplicationContext) :
     // hasn't finished mounting yet, indistinguishable from "not a mass storage
     // device at all". Retry instead of failing fast.
     private val MOUNT_RETRY_INTERVAL_MS = 3000L
-    private val MOUNT_RETRY_BUDGET_MS = 45000L
+    private val MOUNT_RETRY_BUDGET_MS = 5000L
 
     private fun scanVolumes(promise: Promise) {
         executor.execute {
