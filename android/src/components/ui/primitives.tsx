@@ -92,7 +92,7 @@ export function Button({
       ) : (
         <>
           {!!icon && <Icon name={icon} size={16} color={fg} />}
-          <Text style={{ color: fg, fontWeight: '600', fontSize: v3Type.bodyLarge }}>{label}</Text>
+          <Text style={{ color: fg, fontWeight: '600', fontSize: v3Type.bodyLarge, flexShrink: 1, textAlign: 'center' }}>{label}</Text>
         </>
       )}
     </TouchableOpacity>

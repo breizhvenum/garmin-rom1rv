@@ -1368,7 +1368,7 @@ export default function HomeScreen() {
             )}
             {!watchBusy && (
               <View style={styles.heroButtons}>
-                <Button label={L(L("Charger vos activités", "Load your activities"), "Load your activities")} onPress={() => autoWatchImport()} grow={false} />
+                <Button label={L("Charger vos activités avec votre câble USB", "Load your activities with your USB cable")} onPress={() => autoWatchImport()} grow={false} />
               </View>
             )}
           </Card>
